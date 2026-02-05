@@ -1,0 +1,31 @@
+services:
+  # Base de Datos Vectorial
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: documind_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: documind
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+  # Backend (Comentado para desarrollo local con Conda/Antigravity)
+  # backend:
+  #   build:./backend
+  #   container_name: documind_backend
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://user:password@db:5432/documind
+  #     OLLAMA_HOST: http://host.docker.internal:11434
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
