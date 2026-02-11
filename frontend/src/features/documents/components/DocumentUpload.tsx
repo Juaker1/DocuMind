@@ -128,7 +128,12 @@ export function DocumentUpload({ onUpload, isUploading = false }: DocumentUpload
 
                     {/* Button */}
                     {!isUploading && (
-                        <Button variant="primary" size="md" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                            variant="primary"
+                            size="md"
+                            onClick={handleClick}
+                            type="button"
+                        >
                             Seleccionar archivo
                         </Button>
                     )}

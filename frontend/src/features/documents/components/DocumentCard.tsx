@@ -22,9 +22,40 @@ export function DocumentCard({ document, onDelete, isDeleting = false }: Documen
         <Card variant="default" padding="md" className="transition-all hover:shadow-md">
             <CardHeader>
                 <div className="flex items-start justify-between gap-3">
-                    <CardTitle className="text-lg">{document.filename}</CardTitle>
-                    <Badge variant={document.processed ? 'success' : 'warning'} size="sm">
-                        {document.processed ? 'Procesado' : 'Pendiente'}
+                    <CardTitle className="text-lg truncate flex-1 min-w-0">
+                        {document.filename}
+                    </CardTitle>
+                    <Badge
+                        variant={document.processed ? 'success' : 'warning'}
+                        size="sm"
+                        className="flex-shrink-0"
+                    >
+                        {document.processed ? (
+                            'Listo'
+                        ) : (
+                            <>
+                                <svg
+                                    className="h-3 w-3 animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                    />
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                </svg>
+                                Procesando
+                            </>
+                        )}
                     </Badge>
                 </div>
             </CardHeader>
@@ -65,7 +96,7 @@ export function DocumentCard({ document, onDelete, isDeleting = false }: Documen
 
                 {onDelete && (
                     <Button
-                        variant="outline"
+                        variant="danger"
                         size="sm"
                         onClick={() => onDelete(document.id)}
                         isLoading={isDeleting}

@@ -21,6 +21,7 @@ export default function HomePage() {
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   // Fetch documents on mount
   useEffect(() => {
@@ -35,11 +36,19 @@ export default function HomePage() {
     }
   };
 
-  // Handle delete
-  const handleDelete = async (id: number) => {
-    setDeletingId(id);
-    await deleteDocument(id);
+  // Handle delete request (opens confirmation)
+  const handleDeleteRequest = (id: number) => {
+    setDeleteConfirmId(id);
+  };
+
+  // Handle confirmed delete
+  const handleDeleteConfirm = async () => {
+    if (deleteConfirmId === null) return;
+
+    setDeletingId(deleteConfirmId);
+    await deleteDocument(deleteConfirmId);
     setDeletingId(null);
+    setDeleteConfirmId(null);
   };
 
   return (
@@ -99,7 +108,7 @@ export default function HomePage() {
       <DocumentList
         documents={documents}
         isLoading={isLoading}
-        onDelete={handleDelete}
+        onDelete={handleDeleteRequest}
         deletingId={deletingId}
       />
 
@@ -111,6 +120,44 @@ export default function HomePage() {
         size="md"
       >
         <DocumentUpload onUpload={handleUpload} isUploading={isUploading} />
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        title="Confirmar Eliminación"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700">
+            ¿Estás seguro de que quieres eliminar este documento?
+          </p>
+          <p className="font-medium text-gray-900">
+            {documents.find((d) => d.id === deleteConfirmId)?.filename}
+          </p>
+          <p className="text-sm text-gray-500">
+            Esta acción no se puede deshacer.
+          </p>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => setDeleteConfirmId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              fullWidth
+              onClick={handleDeleteConfirm}
+              isLoading={deletingId === deleteConfirmId}
+            >
+              Eliminar
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Stats Section (if there are documents) */}
