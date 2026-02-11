@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { Container, Button, Modal } from '@/components';
-import { DocumentUpload, DocumentList, useDocuments } from '@/features/documents';
+import { DocumentUpload, DocumentList, useDocuments, useDocumentPolling } from '@/features/documents';
 
 export default function HomePage() {
   const {
@@ -17,6 +17,7 @@ export default function HomePage() {
     fetchDocuments,
     uploadDocument,
     deleteDocument,
+    setDocuments,
   } = useDocuments();
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -50,6 +51,16 @@ export default function HomePage() {
     setDeletingId(null);
     setDeleteConfirmId(null);
   };
+
+  // Auto-update document status when processing completes
+  useDocumentPolling({
+    documents,
+    onUpdate: (updatedDocs) => {
+      // Silently update documents without triggering loading state
+      setDocuments(updatedDocs);
+    },
+    enabled: !isLoading, // Only poll when not loading
+  });
 
   return (
     <Container size="xl" className="py-8">

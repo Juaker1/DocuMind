@@ -140,5 +140,6 @@ export function useDocuments() {
         deleteDocument,
         processDocument,
         clearError,
+        setDocuments, // Expose for polling hook
     };
 }
