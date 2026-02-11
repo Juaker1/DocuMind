@@ -49,21 +49,40 @@ export class SSEClient {
 
             // Message received
             this.eventSource.onmessage = (event: MessageEvent) => {
-                // Check for completion signal
-                if (event.data === '[DONE]') {
-                    console.log('✅ SSE Stream complete');
-                    options.onComplete?.();
-                    this.close();
-                    return;
-                }
-
-                // Pass data chunk to callback
+                // Parse data
                 try {
-                    // Try to parse as JSON if possible
                     const data = JSON.parse(event.data);
-                    options.onMessage(data.chunk || data);
-                } catch {
-                    // If not JSON, pass raw data
+
+                    // Check for completion signal
+                    if (data.done === true) {
+                        console.log('✅ SSE Stream complete');
+                        options.onComplete?.();
+                        this.close();
+                        return;
+                    }
+
+                    // Check for error
+                    if (data.error) {
+                        console.error('❌ SSE Error from server:', data.error);
+                        options.onError?.(new Event('error'));
+                        this.close();
+                        return;
+                    }
+
+                    // Pass chunk to callback
+                    if (data.chunk) {
+                        options.onMessage(data.chunk);
+                    }
+                } catch (e) {
+                    // Fallback: check for [DONE] string
+                    if (event.data === '[DONE]') {
+                        console.log('✅ SSE Stream complete');
+                        options.onComplete?.();
+                        this.close();
+                        return;
+                    }
+
+                    // Pass raw data if not JSON
                     options.onMessage(event.data);
                 }
             };

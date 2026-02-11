@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from typing import List
+import json
 from src.application.use_cases.chat_with_document import ChatWithDocumentUseCase
 from src.application.dtos.conversation_dto import (
     ChatRequest, 
@@ -12,6 +14,56 @@ from src.api.dependencies import get_chat_use_case, get_conversation_repository
 from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
 
 router = APIRouter()
+
+@router.get("/stream")
+async def stream_chat(
+    document_id: int,
+    message: str,
+    conversation_id: int | None = None,
+    chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
+):
+    """
+    Endpoint de streaming SSE para chat en tiempo real
+    
+    - **document_id**: ID del documento
+    - **message**: Mensaje del usuario
+    - **conversation_id**: (Opcional) ID de conversación existente
+    
+    Retorna un stream de Server-Sent Events con la respuesta de la IA
+    """
+    async def event_generator():
+        try:
+            # Ejecutar el chat use case
+            response, conv_id, msg_id, cited_pages = await chat_use_case.execute(
+                document_id=document_id,
+                user_message=message,
+                conversation_id=conversation_id
+            )
+            
+            # Split response into words for streaming effect
+            words = response.split(' ')
+            for i, word in enumerate(words):
+                # Send each word as SSE event
+                chunk = word + (' ' if i < len(words) - 1 else '')
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            
+            # Send completion event
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'message_id': msg_id, 'cited_pages': cited_pages})}\n\n"
+            
+        except Exception as e:
+            # Send error event
+            error_msg = f"Error: {str(e)}"
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @router.post("/", response_model=ChatResponse)
 async def chat_with_document(
