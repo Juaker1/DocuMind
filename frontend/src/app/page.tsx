@@ -71,13 +71,13 @@ export default function HomePage() {
     <Container size="xl" className="py-8">
       {/* Hero Section */}
       <div className="mb-12 text-center">
-        <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl">
+        <h1 className="text-4xl font-bold text-gray-900 dark:text-white sm:text-5xl">
           Chatea con tus{' '}
           <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Documentos PDF
           </span>
         </h1>
-        <p className="mt-4 text-lg text-gray-600">
+        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
           Sube tus PDFs y chatea con ellos usando inteligencia artificial
         </p>
       </div>
@@ -103,7 +103,7 @@ export default function HomePage() {
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-800">
+        <div className="mb-6 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 text-red-800 dark:text-red-300">
           <div className="flex items-start gap-3">
             <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -144,19 +144,19 @@ export default function HomePage() {
       {/* Stats Section (if there are documents) */}
       {documents.length > 0 && (
         <div className="mt-12 grid gap-6 sm:grid-cols-3">
-          <div className="rounded-lg bg-white p-6 shadow-sm">
-            <div className="text-sm font-medium text-gray-500">Total Documentos</div>
-            <div className="mt-2 text-3xl font-bold text-gray-900">{documents.length}</div>
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Documentos</div>
+            <div className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{documents.length}</div>
           </div>
-          <div className="rounded-lg bg-white p-6 shadow-sm">
-            <div className="text-sm font-medium text-gray-500">Procesados</div>
-            <div className="mt-2 text-3xl font-bold text-green-600">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Procesados</div>
+            <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
               {documents.filter((d) => d.processed).length}
             </div>
           </div>
-          <div className="rounded-lg bg-white p-6 shadow-sm">
-            <div className="text-sm font-medium text-gray-500">Pendientes</div>
-            <div className="mt-2 text-3xl font-bold text-yellow-600">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 shadow-sm">
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Pendientes</div>
+            <div className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">
               {documents.filter((d) => !d.processed).length}
             </div>
           </div>

@@ -22,8 +22,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 variant="default"
                 padding="md"
                 className={`max-w-[80%] ${isUser
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 border-gray-200'
+                    ? 'bg-blue-600 dark:bg-blue-700 text-white border-blue-600 dark:border-blue-700'
+                    : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
                     }`}
             >
                 <div className="flex items-start gap-3">
@@ -44,9 +44,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     {/* Message Content */}
                     <div className="flex-1 min-w-0">
                         {!isUser && (
-                            <p className="text-sm font-medium text-gray-900 mb-1">DocuMind IA</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">DocuMind IA</p>
                         )}
-                        <div className={`prose prose-sm max-w-none ${isUser ? 'text-white' : 'text-gray-800'}`}>
+                        <div className={`prose prose-sm max-w-none ${isUser ? 'text-white' : 'text-gray-800 dark:text-gray-100'}`}>
                             {message.content}
                         </div>
 
@@ -62,7 +62,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                         )}
 
                         {/* Timestamp */}
-                        <p className={`mt-1 text-xs ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <p className={`mt-1 text-xs ${isUser ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
                             {formatRelativeTime(message.created_at)}
                         </p>
                     </div>

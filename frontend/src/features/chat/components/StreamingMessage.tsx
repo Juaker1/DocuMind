@@ -14,7 +14,7 @@ interface StreamingMessageProps {
 export function StreamingMessage({ text }: StreamingMessageProps) {
     return (
         <div className="flex justify-start">
-            <Card variant="default" padding="md" className="max-w-[80%] bg-blue-50 border-blue-200">
+            <Card variant="default" padding="md" className="max-w-[80%] bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
                 <div className="flex items-start gap-3">
                     {/* AI Avatar */}
                     <div className="flex-shrink-0 rounded-full bg-blue-600 p-2">
@@ -30,10 +30,10 @@ export function StreamingMessage({ text }: StreamingMessageProps) {
 
                     {/* Message Content */}
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-blue-900 mb-1">DocuMind IA</p>
-                        <div className="prose prose-sm max-w-none text-gray-800">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">DocuMind IA</p>
+                        <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-100">
                             {text}
-                            <span className="inline-block w-2 h-4 ml-1 bg-blue-600 animate-pulse" />
+                            <span className="inline-block w-2 h-4 ml-1 bg-blue-600 dark:bg-blue-400 animate-pulse" />
                         </div>
                     </div>
                 </div>

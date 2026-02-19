@@ -10,7 +10,7 @@ import { Card } from '@/components/ui';
 export function TypingIndicator() {
     return (
         <div className="flex justify-start">
-            <Card variant="default" padding="md" className="bg-blue-50 border-blue-200">
+            <Card variant="default" padding="md" className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-3">
                     {/* AI Avatar */}
                     <div className="flex-shrink-0 rounded-full bg-blue-600 p-2">

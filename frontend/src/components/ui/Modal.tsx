@@ -70,7 +70,7 @@ export function Modal({
             {/* Modal content */}
             <div
                 className={cn(
-                    'relative z-10 w-full rounded-lg bg-white shadow-2xl',
+                    'relative z-10 w-full rounded-lg bg-white dark:bg-gray-800 shadow-2xl',
                     'mx-4 max-h-[90vh] overflow-y-auto',
                     sizeClasses[size],
                     className
@@ -81,11 +81,11 @@ export function Modal({
             >
                 {/* Header */}
                 {title && (
-                    <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-                        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+                    <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
                         <button
                             onClick={onClose}
-                            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200"
                             aria-label="Cerrar"
                         >
                             <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

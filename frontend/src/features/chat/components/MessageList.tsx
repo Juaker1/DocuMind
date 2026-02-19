@@ -38,8 +38,8 @@ export function MessageList({ messages, streamingText, isStreaming = false, isLo
     if (messages.length === 0 && !streamingText) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <div className="rounded-full bg-blue-100 p-6 mb-4">
-                    <svg className="h-16 w-16 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="rounded-full bg-blue-100 dark:bg-blue-900/30 p-6 mb-4">
+                    <svg className="h-16 w-16 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -48,10 +48,10 @@ export function MessageList({ messages, streamingText, isStreaming = false, isLo
                         />
                     </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                     Comienza una conversación
                 </h3>
-                <p className="text-gray-600 max-w-md">
+                <p className="text-gray-600 dark:text-gray-400 max-w-md">
                     Haz preguntas sobre el contenido del documento y obtén respuestas al instante con DocuMind IA.
                 </p>
             </div>

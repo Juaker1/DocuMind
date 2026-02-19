@@ -53,7 +53,7 @@ export function DocumentCard({ document, onDelete, onReset, isDeleting = false, 
             </CardHeader>
 
             <CardContent>
-                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <div><span className="font-medium">Tamaño:</span> {formatFileSize(document.file_size)}</div>
                     <div><span className="font-medium">Páginas:</span> {document.total_pages}</div>
                     <div className="col-span-2"><span className="font-medium">Subido:</span> {formatRelativeTime(document.upload_date)}</div>

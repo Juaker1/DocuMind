@@ -1,24 +1,19 @@
 /**
- * Header component for main navigation
+ * Header component — logo + dark mode toggle only.
+ * Nav links removed (home is the only route users start from).
  */
 
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import { APP_NAME, ROUTES } from '@/lib/constants';
+import { useTheme } from './ThemeProvider';
 
 export function Header() {
-    const pathname = usePathname();
-
-    const navItems = [
-        { label: 'Inicio', href: ROUTES.HOME },
-        { label: 'Documentos', href: ROUTES.DOCUMENTS },
-    ];
+    const { theme, toggleTheme } = useTheme();
 
     return (
-        <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+        <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/80 dark:border-gray-700 dark:bg-gray-900/80 backdrop-blur-sm">
             <div className="container mx-auto flex h-16 items-center justify-between px-4">
                 {/* Logo */}
                 <Link href={ROUTES.HOME} className="flex items-center gap-2">
@@ -32,29 +27,33 @@ export function Header() {
                             />
                         </svg>
                     </div>
-                    <span className="text-xl font-bold text-gray-900">{APP_NAME}</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_NAME}</span>
                 </Link>
 
-                {/* Navigation */}
-                <nav className="flex items-center gap-1">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={cn(
-                                    'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-                                    isActive
-                                        ? 'bg-blue-50 text-blue-600'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                                )}
-                            >
-                                {item.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
+                {/* Dark mode toggle */}
+                <button
+                    onClick={toggleTheme}
+                    aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                    className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                    {theme === 'dark' ? (
+                        <>
+                            {/* Sun icon */}
+                            <svg className="h-4 w-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                            </svg>
+                            Modo claro
+                        </>
+                    ) : (
+                        <>
+                            {/* Moon icon */}
+                            <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                            Modo oscuro
+                        </>
+                    )}
+                </button>
             </div>
         </header>
     );
