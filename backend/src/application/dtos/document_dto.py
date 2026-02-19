@@ -22,6 +22,7 @@ class DocumentListItem(BaseModel):
     total_pages: int
     upload_date: datetime
     processed: bool
+    has_conversation: bool = False
     
     class Config:
         from_attributes = True

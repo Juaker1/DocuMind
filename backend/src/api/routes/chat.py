@@ -19,19 +19,17 @@ router = APIRouter()
 async def stream_chat(
     document_id: int,
     message: str,
-    conversation_id: int | None = None,
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
 ):
     """
     Endpoint de streaming SSE para chat en tiempo real.
-    Los tokens fluyen directamente desde Ollama al navegador.
+    Usa 1 conversación por documento — no requiere conversation_id.
     """
     async def event_generator():
         try:
             gen = await chat_use_case.execute_stream(
                 document_id=document_id,
                 user_message=message,
-                conversation_id=conversation_id,
             )
             async for event in gen:
                 yield f"data: {json.dumps(event)}\n\n"
@@ -168,17 +166,13 @@ async def delete_conversation(
     conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
 ):
     """
-    Elimina una conversación y todos sus mensajes
-    
-    - **conversation_id**: ID de la conversación
+    Elimina una conversación y todos sus mensajes.
     """
     try:
-        # Verificar que existe
         conversation = await conversation_repo.find_by_id(conversation_id)
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
         
-        # Eliminar
         success = await conversation_repo.delete_conversation(conversation_id)
         
         if success:
@@ -190,3 +184,28 @@ async def delete_conversation(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al eliminar conversación: {str(e)}")
+
+
+@router.delete("/documents/{document_id}/conversation")
+async def reset_document_conversation(
+    document_id: int,
+    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
+):
+    """
+    Resetea (borra) la única conversación de un documento.
+    El próximo mensaje creará una conversación nueva desde cero.
+    """
+    try:
+        conversations = await conversation_repo.find_by_document_id(document_id)
+        if not conversations:
+            # Nada que borrar — devolvemos ok igual
+            return {"message": "No hay conversación activa para este documento"}
+        
+        conv = conversations[0]
+        await conversation_repo.delete_conversation(conv.id)
+        return {"message": "Chat reiniciado exitosamente"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al resetear conversación: {str(e)}")

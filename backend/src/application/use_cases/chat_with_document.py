@@ -24,19 +24,23 @@ class ChatWithDocumentUseCase:
         self,
         document_id: int,
         user_message: str,
-        conversation_id: Optional[int],
+        conversation_id: Optional[int] = None,  # mantenido por compatibilidad pero ignorado
     ):
-        """Lógica compartida: obtener/crear conversación, guardar msg usuario, recuperar chunks."""
-        if conversation_id is None or conversation_id <= 0:
+        """
+        Lógica compartida: obtener/crear conversación, guardar msg usuario, recuperar chunks.
+        SIEMPRE usa 1 conversación por documento — ignora conversation_id del frontend.
+        """
+        # Buscar conversación existente para este documento
+        existing = await self.conversation_repository.find_by_document_id(document_id)
+        if existing:
+            conversation = existing[0]
+            conversation_id = conversation.id
+            print(f"💬 Reutilizando conversación existente: ID {conversation_id}")
+        else:
             conversation = Conversation(document_id=document_id, created_at=datetime.now())
             conversation = await self.conversation_repository.save_conversation(conversation)
             conversation_id = conversation.id
             print(f"💬 Nueva conversación creada: ID {conversation_id}")
-        else:
-            conversation = await self.conversation_repository.find_by_id(conversation_id)
-            if not conversation:
-                raise ValueError(f"Conversación con ID {conversation_id} no encontrada")
-            print(f"💬 Continuando conversación: ID {conversation_id}")
 
         user_msg = Message(
             conversation_id=conversation_id,

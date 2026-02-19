@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from src.infrastructure.database.connection import Base
@@ -50,8 +50,11 @@ class DocumentChunkModel(Base):
     document = relationship("DocumentModel", back_populates="chunks")
 
 class ConversationModel(Base):
-    """Modelo para conversaciones sobre documentos"""
+    """Modelo para conversaciones sobre documentos (una por documento)"""
     __tablename__ = "conversations"
+    __table_args__ = (
+        UniqueConstraint('document_id', name='uq_conversations_document_id'),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     document_id = Column(

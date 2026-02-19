@@ -1,7 +1,7 @@
 /**
  * useChat hook
- * Manages chat state, messages, and conversations with full persistence.
- * Automatically loads the last conversation for the document on mount.
+ * Manages chat state for a single document.
+ * One conversation per document — backend handles find-or-create.
  */
 
 'use client';
@@ -10,36 +10,19 @@ import { useState, useCallback, useEffect } from 'react';
 import { conversationsService } from '@/services';
 import { useApiError } from '@/hooks';
 import { useStreamingResponse } from './useStreamingResponse';
-import type { Message, Conversation, ChatRequest } from '@/types/chat';
+import type { Message } from '@/types/chat';
 
 export function useChat(documentId: number) {
     const [messages, setMessages] = useState<Message[]>([]);
-    const [conversations, setConversations] = useState<Conversation[]>([]);
     const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
     const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+    const [isResetting, setIsResetting] = useState(false);
     const { error, handleError, clearError } = useApiError();
     const streaming = useStreamingResponse();
 
     /**
-     * Load full message history for a given conversation
-     */
-    const loadConversation = useCallback(async (conversationId: number) => {
-        setIsLoading(true);
-        clearError();
-        try {
-            const conversation = await conversationsService.getById(conversationId);
-            setMessages(conversation.messages ?? []);
-            setCurrentConversationId(conversationId);
-        } catch (err) {
-            handleError(err);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [handleError, clearError]);
-
-    /**
-     * On mount: fetch existing conversations for this document and auto-load the latest one.
+     * On mount: fetch the single existing conversation for this document (if any)
+     * and load its messages.
      */
     useEffect(() => {
         let cancelled = false;
@@ -50,15 +33,13 @@ export function useChat(documentId: number) {
                 const convos = await conversationsService.listByDocument(documentId);
                 if (cancelled) return;
 
-                setConversations(convos);
-
                 if (convos.length > 0) {
-                    // Backend ordena por fecha DESC, el más reciente es convos[0]
-                    const latest = convos[0];
-                    const detail = await conversationsService.getById(latest.id);
+                    // There is at most one conversation per document
+                    const conv = convos[0];
+                    const detail = await conversationsService.getById(conv.id);
                     if (cancelled) return;
                     setMessages(detail.messages ?? []);
-                    setCurrentConversationId(latest.id);
+                    setCurrentConversationId(conv.id);
                 }
             } catch (err) {
                 if (!cancelled) handleError(err);
@@ -74,7 +55,7 @@ export function useChat(documentId: number) {
 
     /**
      * Send a message with SSE streaming.
-     * After the stream completes, captures the backend-assigned conversation_id.
+     * Does not pass conversation_id — backend always resolves by document_id.
      */
     const sendMessage = useCallback(async (messageText: string) => {
         if (!messageText.trim()) return;
@@ -90,27 +71,23 @@ export function useChat(documentId: number) {
         };
         setMessages((prev) => [...prev, userMessage]);
 
-        const request: ChatRequest = {
-            document_id: documentId,
-            message: messageText,
-            conversation_id: currentConversationId || undefined,
-        };
-
         try {
-            streaming.startStreaming(request, (completionData) => {
-                // Persist conversation_id from backend for future messages
-                if (completionData.conversation_id) {
-                    setCurrentConversationId(completionData.conversation_id);
+            streaming.startStreaming(
+                { document_id: documentId, message: messageText },
+                (completionData) => {
+                    if (completionData.conversation_id) {
+                        setCurrentConversationId(completionData.conversation_id);
+                    }
                 }
-            });
+            );
         } catch (err) {
             handleError(err);
             setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
         }
-    }, [documentId, currentConversationId, streaming, handleError, clearError]);
+    }, [documentId, streaming, handleError, clearError]);
 
     /**
-     * Finalize: move streaming text into the permanent messages list
+     * Move streaming text into the permanent messages list once stream completes.
      */
     const finalizeStreamingMessage = useCallback(() => {
         if (streaming.streamingText) {
@@ -126,25 +103,33 @@ export function useChat(documentId: number) {
     }, [streaming]);
 
     /**
-     * Start a fresh conversation (clear history)
+     * Reset: delete the conversation from the backend and clear all local state.
+     * The next message will create a fresh conversation automatically.
      */
-    const startNewConversation = useCallback(() => {
-        setCurrentConversationId(null);
-        setMessages([]);
-        streaming.resetStreaming();
-    }, [streaming]);
+    const resetConversation = useCallback(async () => {
+        setIsResetting(true);
+        clearError();
+        try {
+            await conversationsService.resetByDocument(documentId);
+            setMessages([]);
+            setCurrentConversationId(null);
+            streaming.resetStreaming();
+        } catch (err) {
+            handleError(err);
+        } finally {
+            setIsResetting(false);
+        }
+    }, [documentId, streaming, handleError, clearError]);
 
     return {
         messages,
-        conversations,
         currentConversationId,
-        isLoading,
         isHistoryLoading,
+        isResetting,
         error,
         streaming,
         sendMessage,
-        loadConversation,
         finalizeStreamingMessage,
-        startNewConversation,
+        resetConversation,
     };
 }

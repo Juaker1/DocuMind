@@ -28,6 +28,7 @@ export interface DocumentListItem {
     total_pages: number;
     upload_date: string;
     processed: boolean;
+    has_conversation: boolean;
 }
 
 export interface DocumentDetail extends Document {

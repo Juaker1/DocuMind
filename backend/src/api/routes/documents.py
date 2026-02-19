@@ -108,13 +108,25 @@ async def list_documents(
     document_repo: DocumentRepositoryImpl = Depends(get_document_repository)
 ):
     """
-    Lista todos los documentos subidos
-    
-    Retorna una lista con todos los documentos del sistema.
+    Lista todos los documentos subidos.
+    Incluye `has_conversation` para cada documento.
     """
+    from sqlalchemy import select, exists
+    from src.infrastructure.database.models import DocumentModel, ConversationModel
+
     try:
-        documents = await document_repo.find_all()
-        
+        # Subquery: ¿existe al menos una conversación para este documento?
+        conv_exists = (
+            select(ConversationModel.id)
+            .where(ConversationModel.document_id == DocumentModel.id)
+            .correlate(DocumentModel)
+            .exists()
+        )
+
+        stmt = select(DocumentModel, conv_exists.label("has_conversation"))
+        result = await document_repo.session.execute(stmt)
+        rows = result.all()
+
         return [
             DocumentListItem(
                 id=doc.id,
@@ -122,12 +134,14 @@ async def list_documents(
                 file_size=doc.file_size,
                 total_pages=doc.total_pages,
                 upload_date=doc.upload_date,
-                processed=doc.processed
+                processed=doc.processed,
+                has_conversation=bool(has_conv),
             )
-            for doc in documents
+            for doc, has_conv in rows
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar documentos: {str(e)}")
+
 
 @router.get("/{document_id}", response_model=DocumentDetail)
 async def get_document(

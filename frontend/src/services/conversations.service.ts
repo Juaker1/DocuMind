@@ -36,4 +36,15 @@ export const conversationsService = {
         );
         return response.data;
     },
+
+    /**
+     * Reset (delete) the single conversation for a document.
+     * The next chat message will create a fresh conversation automatically.
+     */
+    async resetByDocument(documentId: number): Promise<{ message: string }> {
+        const response = await apiClient.delete(
+            `/api/chat/documents/${documentId}/conversation`
+        );
+        return response.data;
+    },
 };

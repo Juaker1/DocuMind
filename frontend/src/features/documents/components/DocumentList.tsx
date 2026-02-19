@@ -13,14 +13,18 @@ interface DocumentListProps {
     documents: DocumentListItem[];
     isLoading?: boolean;
     onDelete?: (id: number) => void;
+    onReset?: (id: number) => void;
     deletingId?: number | null;
+    resettingId?: number | null;
 }
 
 export function DocumentList({
     documents,
     isLoading = false,
     onDelete,
-    deletingId = null
+    onReset,
+    deletingId = null,
+    resettingId = null
 }: DocumentListProps) {
     // Loading state
     if (isLoading) {
@@ -62,7 +66,9 @@ export function DocumentList({
                     key={document.id}
                     document={document}
                     onDelete={onDelete}
+                    onReset={onReset}
                     isDeleting={deletingId === document.id}
+                    isResetting={resettingId === document.id}
                 />
             ))}
         </div>
