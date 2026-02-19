@@ -8,16 +8,18 @@
 import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { StreamingMessage } from './StreamingMessage';
+import { TypingIndicator } from './TypingIndicator';
 import { Spinner } from '@/components/ui';
 import type { Message } from '@/types/chat';
 
 interface MessageListProps {
     messages: Message[];
     streamingText?: string;
+    isStreaming?: boolean;
     isLoading?: boolean;
 }
 
-export function MessageList({ messages, streamingText, isLoading = false }: MessageListProps) {
+export function MessageList({ messages, streamingText, isStreaming = false, isLoading = false }: MessageListProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom when new messages arrive
@@ -63,6 +65,9 @@ export function MessageList({ messages, streamingText, isLoading = false }: Mess
             ))}
 
             {streamingText && <StreamingMessage text={streamingText} />}
+
+            {/* Show typing indicator when streaming started but no text yet */}
+            {isStreaming && !streamingText && <TypingIndicator />}
 
             <div ref={messagesEndRef} />
         </div>

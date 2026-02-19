@@ -9,6 +9,8 @@ from src.api.dependencies import (
     get_document_repository
 )
 from src.infrastructure.database.repositories.document_repository_impl import DocumentRepositoryImpl
+from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
+from src.infrastructure.database.connection import AsyncSessionLocal
 
 router = APIRouter()
 
@@ -46,11 +48,10 @@ async def upload_document(
             file_size=file_size
         )
         
-        # Procesar documento en background
+        # Procesar documento en background usando una sesión PROPIA (no la del request)
         background_tasks.add_task(
             process_document_background,
-            document.id,
-            process_use_case
+            document.id
         )
         
         return DocumentUploadResponse(
@@ -67,12 +68,23 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al subir documento: {str(e)}")
 
-async def process_document_background(document_id: int, process_use_case: ProcessDocumentUseCase):
-    """Función auxiliar para procesar documento en background"""
-    try:
-        await process_use_case.execute(document_id)
-    except Exception as e:
-        print(f"Error procesando documento {document_id}: {str(e)}")
+async def process_document_background(document_id: int):
+    """
+    Procesa el documento en background con su PROPIA sesión de BD.
+    Crítico: NO reutilizar la sesión del request original — ya estará cerrada.
+    """
+    print(f"🔄 Iniciando procesamiento en background para documento {document_id}")
+    async with AsyncSessionLocal() as session:
+        try:
+            document_repo = DocumentRepositoryImpl(session)
+            chunk_repo = DocumentChunkRepositoryImpl(session)
+            use_case = ProcessDocumentUseCase(document_repo, chunk_repo)
+            chunks = await use_case.execute(document_id)
+            await session.commit()
+            print(f"✅ Background: documento {document_id} procesado con {len(chunks)} chunks guardados")
+        except Exception as e:
+            await session.rollback()
+            print(f"❌ Background: error procesando documento {document_id}: {str(e)}")
 
 @router.get("/", response_model=List[DocumentListItem])
 async def list_documents(

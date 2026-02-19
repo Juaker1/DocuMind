@@ -62,7 +62,7 @@ export function ChatInterface({ document }: ChatInterfaceProps) {
             {/* Error Display */}
             {error && (
                 <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-600">
-                    {error}
+                    {typeof error === 'string' ? error : (error as { message?: string }).message ?? 'Error desconocido'}
                 </div>
             )}
 
@@ -71,6 +71,7 @@ export function ChatInterface({ document }: ChatInterfaceProps) {
                 <MessageList
                     messages={messages}
                     streamingText={streaming.streamingText}
+                    isStreaming={streaming.isStreaming}
                     isLoading={isLoading}
                 />
 
