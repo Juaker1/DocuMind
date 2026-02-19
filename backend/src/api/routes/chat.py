@@ -110,7 +110,7 @@ async def get_conversation(
                 role=msg.role,
                 content=msg.content,
                 created_at=msg.created_at,
-                cited_pages=msg.cited_chunks  # Será una lista de IDs de chunks
+                cited_pages=None  # cited_chunks son IDs de chunks, no números de página
             )
             for msg in messages
         ]

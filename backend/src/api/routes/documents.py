@@ -3,14 +3,11 @@ from typing import List
 from src.application.use_cases.upload_document import UploadDocumentUseCase
 from src.application.use_cases.process_document import ProcessDocumentUseCase
 from src.application.dtos.document_dto import DocumentUploadResponse, DocumentListItem, DocumentDetail
-from src.api.dependencies import (
-    get_upload_document_use_case, 
-    get_process_document_use_case,
-    get_document_repository
-)
+from src.api.dependencies import get_document_repository
 from src.infrastructure.database.repositories.document_repository_impl import DocumentRepositoryImpl
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
 from src.infrastructure.database.connection import AsyncSessionLocal
+
 
 router = APIRouter()
 
@@ -18,15 +15,11 @@ router = APIRouter()
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    upload_use_case: UploadDocumentUseCase = Depends(get_upload_document_use_case),
-    process_use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case)
 ):
     """
-    Sube un documento PDF para ser procesado
-    
-    - **file**: Archivo PDF a subir
-    
-    Retorna la información del documento subido y automáticamente inicia el procesamiento en background.
+    Sube un documento PDF para ser procesado.
+    Usa su propia sesión de BD con commit explícito antes de programar el background task,
+    para evitar race conditions con el procesamiento en background.
     """
     # Validar tipo de archivo
     if not file.filename.endswith('.pdf'):
@@ -36,19 +29,34 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="El archivo debe ser un PDF válido")
     
     # Obtener tamaño del archivo
-    file.file.seek(0, 2)  # Ir al final del archivo
-    file_size = file.file.tell()  # Obtener posición (tamaño)
-    file.file.seek(0)  # Volver al inicio
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
     
     try:
-        # Subir documento
-        document = await upload_use_case.execute(
-            file=file.file,
-            filename=file.filename,
-            file_size=file_size
-        )
+        # Usar sesión propia con commit explícito e inmediato
+        async with AsyncSessionLocal() as session:
+            try:
+                document_repo = DocumentRepositoryImpl(session)
+                chunk_repo = DocumentChunkRepositoryImpl(session)
+                upload_use_case = UploadDocumentUseCase(document_repo, chunk_repo)
+                
+                document = await upload_use_case.execute(
+                    file=file.file,
+                    filename=file.filename,
+                    file_size=file_size
+                )
+                
+                # Commit inmediato — garantiza que el documento está en BD
+                # antes de que el background task intente encontrarlo
+                await session.commit()
+                print(f"💾 Documento {document.id} guardado y commiteado en BD")
+                
+            except Exception:
+                await session.rollback()
+                raise
         
-        # Procesar documento en background usando una sesión PROPIA (no la del request)
+        # Programar procesamiento en background DESPUÉS del commit
         background_tasks.add_task(
             process_document_background,
             document.id
@@ -68,11 +76,16 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al subir documento: {str(e)}")
 
+
 async def process_document_background(document_id: int):
     """
     Procesa el documento en background con su PROPIA sesión de BD.
-    Crítico: NO reutilizar la sesión del request original — ya estará cerrada.
+    Espera brevemente para garantizar que el commit del request original ya ocurrió.
     """
+    import asyncio
+    import traceback
+
+    # Pequeña espera removida: el upload ya hace commit antes de programar este task
     print(f"🔄 Iniciando procesamiento en background para documento {document_id}")
     async with AsyncSessionLocal() as session:
         try:
@@ -82,9 +95,13 @@ async def process_document_background(document_id: int):
             chunks = await use_case.execute(document_id)
             await session.commit()
             print(f"✅ Background: documento {document_id} procesado con {len(chunks)} chunks guardados")
+        except ValueError as e:
+            await session.rollback()
+            print(f"⚠️ Background: error de validación en documento {document_id}: {str(e)}")
         except Exception as e:
             await session.rollback()
             print(f"❌ Background: error procesando documento {document_id}: {str(e)}")
+            traceback.print_exc()
 
 @router.get("/", response_model=List[DocumentListItem])
 async def list_documents(
@@ -115,8 +132,7 @@ async def list_documents(
 @router.get("/{document_id}", response_model=DocumentDetail)
 async def get_document(
     document_id: int,
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
-    conversation_repo = Depends(get_document_repository)  # Usaremos para contar conversaciones
+    document_repo: DocumentRepositoryImpl = Depends(get_document_repository)
 ):
     """
     Obtiene los detalles de un documento específico
@@ -146,7 +162,6 @@ async def get_document(
 @router.post("/{document_id}/process")
 async def process_document(
     document_id: int,
-    process_use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case)
 ):
     """
     Procesa manualmente un documento (genera embeddings)
@@ -156,7 +171,16 @@ async def process_document(
     Útil si el procesamiento automático falló o si se quiere reprocesar.
     """
     try:
-        chunks = await process_use_case.execute(document_id)
+        async with AsyncSessionLocal() as session:
+            try:
+                document_repo = DocumentRepositoryImpl(session)
+                chunk_repo = DocumentChunkRepositoryImpl(session)
+                use_case = ProcessDocumentUseCase(document_repo, chunk_repo)
+                chunks = await use_case.execute(document_id)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
         
         return {
             "message": "Documento procesado exitosamente",
@@ -167,6 +191,7 @@ async def process_document(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al procesar documento: {str(e)}")
+
 
 @router.delete("/{document_id}")
 async def delete_document(

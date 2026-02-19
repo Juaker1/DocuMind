@@ -9,6 +9,7 @@ import { useState, useCallback, useRef } from 'react';
 import { chatService } from '@/services';
 import type { ChatRequest } from '@/types/chat';
 import { SSEClient } from '@/services/sse-client';
+import type { SSECompletionData } from '@/services/sse-client';
 
 export function useStreamingResponse() {
     const [streamingText, setStreamingText] = useState('');
@@ -17,9 +18,13 @@ export function useStreamingResponse() {
     const sseClientRef = useRef<SSEClient | null>(null);
 
     /**
-     * Start streaming chat response
+     * Start streaming chat response.
+     * onComplete receives the backend metadata (conversation_id, etc.)
      */
-    const startStreaming = useCallback((request: ChatRequest) => {
+    const startStreaming = useCallback((
+        request: ChatRequest,
+        onComplete?: (data: SSECompletionData) => void,
+    ) => {
         setStreamingText('');
         setIsStreaming(true);
         setError(null);
@@ -31,9 +36,10 @@ export function useStreamingResponse() {
             onMessage: (chunk) => {
                 setStreamingText((prev) => prev + chunk);
             },
-            onComplete: () => {
-                console.log('✅ SSE Stream complete');
+            onComplete: (data) => {
+                console.log('✅ SSE Stream complete', data);
                 setIsStreaming(false);
+                onComplete?.(data);
             },
             onError: (err) => {
                 console.error('❌ SSE Error:', err);

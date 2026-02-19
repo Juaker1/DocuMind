@@ -3,6 +3,12 @@
  * Used for chat message streaming from the backend
  */
 
+export interface SSECompletionData {
+    conversation_id: number;
+    message_id: number;
+    cited_pages: number[];
+}
+
 export interface SSEOptions {
     /**
      * Callback when a message chunk is received
@@ -15,15 +21,16 @@ export interface SSEOptions {
     onError?: (error: Event) => void;
 
     /**
-     * Callback when streaming is complete
+     * Callback when streaming is complete — receives conversation metadata
      */
-    onComplete?: () => void;
+    onComplete?: (data: SSECompletionData) => void;
 
     /**
      * Callback when connection is opened
      */
     onOpen?: () => void;
 }
+
 
 /**
  * SSE Client for handling streaming connections
@@ -55,8 +62,12 @@ export class SSEClient {
 
                     // Check for completion signal
                     if (data.done === true) {
-                        console.log('✅ SSE Stream complete');
-                        options.onComplete?.();
+                        console.log('✅ SSE Stream complete', data);
+                        options.onComplete?.({
+                            conversation_id: data.conversation_id,
+                            message_id: data.message_id,
+                            cited_pages: data.cited_pages ?? [],
+                        });
                         this.close();
                         return;
                     }
@@ -76,8 +87,12 @@ export class SSEClient {
                 } catch (e) {
                     // Fallback: check for [DONE] string
                     if (event.data === '[DONE]') {
-                        console.log('✅ SSE Stream complete');
-                        options.onComplete?.();
+                        console.log('✅ SSE Stream complete (fallback)');
+                        options.onComplete?.({
+                            conversation_id: 0,
+                            message_id: 0,
+                            cited_pages: [],
+                        });
                         this.close();
                         return;
                     }
