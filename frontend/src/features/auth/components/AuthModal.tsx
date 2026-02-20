@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +23,18 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'register' }: AuthModa
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState<string | null>(null);
+
+    // Reset tab and form every time the modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setTab(defaultTab);
+            setEmail('');
+            setPassword('');
+            setConfirm('');
+            setError(null);
+            setSuccess(null);
+        }
+    }, [isOpen, defaultTab]);
 
     const reset = () => {
         setEmail(''); setPassword(''); setConfirm('');
@@ -74,8 +86,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'register' }: AuthModa
                         key={t}
                         onClick={() => switchTab(t)}
                         className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === t
-                                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                             }`}
                     >
                         {t === 'register' ? 'Crear cuenta' : 'Iniciar sesión'}

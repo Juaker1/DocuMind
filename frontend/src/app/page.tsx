@@ -12,7 +12,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { AuthModal } from '@/features/auth/components/AuthModal';
 
 export default function HomePage() {
-  const { isAnonymous } = useAuth();
+  const { user, isAnonymous } = useAuth();
   const {
     documents,
     isLoading,
@@ -29,10 +29,11 @@ export default function HomePage() {
   const [resettingId, setResettingId] = useState<number | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
 
-  // Fetch documents on mount
+  // Fetch documents whenever the authenticated user changes (login, logout, register)
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Handle file upload
   const handleUpload = async (file: File) => {
