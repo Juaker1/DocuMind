@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "DocuMind"
     debug: bool = True
+
+    # Auth
+    secret_key: str = "change-me-in-production-use-a-long-random-string"
     
     # Upload Configuration
     max_file_size: int = 10 * 1024 * 1024  # 10MB

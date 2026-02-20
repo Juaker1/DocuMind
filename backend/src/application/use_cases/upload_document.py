@@ -31,7 +31,8 @@ class UploadDocumentUseCase:
         self,
         file: BinaryIO,
         filename: str,
-        file_size: int
+        file_size: int,
+        user_id: int = None,
     ) -> Document:
         """
         Ejecuta el caso de uso de subir un documento
@@ -80,7 +81,8 @@ class UploadDocumentUseCase:
             file_size=file_size,
             total_pages=total_pages,
             upload_date=datetime.now(),
-            processed=False
+            processed=False,
+            user_id=user_id,
         )
         
         # Guardar en base de datos

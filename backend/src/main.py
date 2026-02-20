@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import get_settings
-from src.api.routes import health, documents, chat
+from src.api.routes import health, documents, chat, auth
 
 settings = get_settings()
 
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["Health"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 
 @app.on_event("startup")
 async def startup_event():

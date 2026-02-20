@@ -64,7 +64,7 @@ export function useDocuments() {
             const newDoc = await documentsService.upload(file);
 
             // Add to list
-            setDocuments((prev) => [newDoc, ...prev]);
+            setDocuments((prev) => [{ ...newDoc, has_conversation: false }, ...prev]);
 
             return newDoc;
         } catch (err) {

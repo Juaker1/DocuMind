@@ -29,11 +29,17 @@ apiClient.interceptors.request.use(
             console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`);
         }
 
-        // Add auth token if needed in the future
-        // const token = getAuthToken();
-        // if (token) {
-        //   config.headers.Authorization = `Bearer ${token}`;
-        // }
+        // Inject identity headers on every request
+        if (typeof window !== 'undefined') {
+            const { getAuthToken, getOrCreateUUID } = require('@/lib/identity');
+            const token = getAuthToken();
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            } else {
+                const uuid = getOrCreateUUID();
+                config.headers['X-User-UUID'] = uuid;
+            }
+        }
 
         return config;
     },

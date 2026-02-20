@@ -8,8 +8,11 @@ import { useEffect, useState } from 'react';
 import { Container, Button, Modal } from '@/components';
 import { DocumentUpload, DocumentList, useDocuments, useDocumentPolling } from '@/features/documents';
 import { conversationsService } from '@/services';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { AuthModal } from '@/features/auth/components/AuthModal';
 
 export default function HomePage() {
+  const { isAnonymous } = useAuth();
   const {
     documents,
     isLoading,
@@ -24,6 +27,7 @@ export default function HomePage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [resettingId, setResettingId] = useState<number | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
 
   // Fetch documents on mount
   useEffect(() => {
@@ -69,6 +73,25 @@ export default function HomePage() {
 
   return (
     <Container size="xl" className="py-8">
+      {/* Anonymous user banner */}
+      {isAnonymous && (
+        <div className="mb-8 flex items-center justify-between gap-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-5 py-4 text-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🔒</span>
+            <div>
+              <p className="font-semibold text-blue-900 dark:text-blue-200">Estás navegando como invitado</p>
+              <p className="text-blue-700 dark:text-blue-400">Crea una cuenta para acceder a tus documentos desde cualquier dispositivo.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAuthOpen(true)}
+            className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium transition-colors"
+          >
+            Crear cuenta gratis
+          </button>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="mb-12 text-center">
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white sm:text-5xl">
@@ -140,6 +163,8 @@ export default function HomePage() {
         <DocumentUpload onUpload={handleUpload} isUploading={isUploading} />
       </Modal>
 
+      {/* Auth Modal (triggered from anonymous banner) */}
+      <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} defaultTab="register" />
 
       {/* Stats Section (if there are documents) */}
       {documents.length > 0 && (

@@ -10,8 +10,10 @@ from src.application.dtos.conversation_dto import (
     ConversationDetailDTO,
     MessageDTO
 )
-from src.api.dependencies import get_chat_use_case, get_conversation_repository
+from src.api.dependencies import get_chat_use_case, get_conversation_repository, get_current_user, get_user_repository
 from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
+from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.domain.entities.user import User
 
 router = APIRouter()
 
@@ -19,12 +21,20 @@ router = APIRouter()
 async def stream_chat(
     document_id: int,
     message: str,
-    chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
+    # SSE via EventSource can't set headers — accept auth tokens as query params
+    token: str = None,
+    user_uuid: str = None,
+    chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case),
+    user_repo: UserRepositoryImpl = Depends(get_user_repository),
 ):
     """
     Endpoint de streaming SSE para chat en tiempo real.
     Usa 1 conversación por documento — no requiere conversation_id.
     """
+    from src.application.use_cases.create_jwt import decode_access_token
+    from src.application.use_cases.get_or_create_anonymous_user import GetOrCreateAnonymousUserUseCase
+    from src.infrastructure.database.connection import AsyncSessionLocal
+
     async def event_generator():
         try:
             gen = await chat_use_case.execute_stream(
@@ -52,6 +62,7 @@ async def stream_chat(
 @router.post("/", response_model=ChatResponse)
 async def chat_with_document(
     request: ChatRequest,
+    current_user: User = Depends(get_current_user),
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
 ):
     """
@@ -163,6 +174,7 @@ async def get_document_conversations(
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: int,
+    current_user: User = Depends(get_current_user),
     conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
 ):
     """
@@ -189,6 +201,7 @@ async def delete_conversation(
 @router.delete("/documents/{document_id}/conversation")
 async def reset_document_conversation(
     document_id: int,
+    current_user: User = Depends(get_current_user),
     conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
 ):
     """
