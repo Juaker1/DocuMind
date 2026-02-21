@@ -4,14 +4,16 @@ from typing import List
 import json
 from src.application.use_cases.chat_with_document import ChatWithDocumentUseCase
 from src.application.dtos.conversation_dto import (
-    ChatRequest, 
-    ChatResponse, 
+    ChatRequest,
+    ChatResponse,
     ConversationDTO,
     ConversationDetailDTO,
-    MessageDTO
+    MessageDTO,
+    CitedSnippet,
 )
-from src.api.dependencies import get_chat_use_case, get_conversation_repository, get_current_user, get_user_repository
+from src.api.dependencies import get_chat_use_case, get_conversation_repository, get_chunk_repository, get_current_user, get_user_repository
 from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
+from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
 from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
 from src.domain.entities.user import User
 
@@ -96,43 +98,54 @@ async def chat_with_document(
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailDTO)
 async def get_conversation(
     conversation_id: int,
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
+    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository),
+    chunk_repo: DocumentChunkRepositoryImpl = Depends(get_chunk_repository),
 ):
     """
-    Obtiene el historial completo de una conversación
-    
-    - **conversation_id**: ID de la conversación
+    Obtiene el historial completo de una conversación, incluyendo citas de páginas.
     """
     try:
-        # Obtener conversación
         conversation = await conversation_repo.find_by_id(conversation_id)
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
-        
-        # Obtener mensajes
+
         messages = await conversation_repo.get_messages(conversation_id)
-        
-        # Convertir a DTOs
-        message_dtos = [
-            MessageDTO(
-                id=msg.id,
-                role=msg.role,
-                content=msg.content,
-                created_at=msg.created_at,
-                cited_pages=None  # cited_chunks son IDs de chunks, no números de página
+
+        message_dtos = []
+        for msg in messages:
+            cited_pages = None
+            cited_snippets = None
+
+            if msg.cited_chunks:
+                chunks = await chunk_repo.find_by_ids(msg.cited_chunks)
+                # Ordenar por página para presentación consistente
+                chunks_sorted = sorted(chunks, key=lambda c: (c.page_number, c.chunk_index))
+                cited_pages = sorted(set(c.page_number for c in chunks_sorted))
+                cited_snippets = [
+                    CitedSnippet(page=c.page_number, text=c.content[:250].strip())
+                    for c in chunks_sorted
+                ]
+
+            message_dtos.append(
+                MessageDTO(
+                    id=msg.id,
+                    role=msg.role,
+                    content=msg.content,
+                    created_at=msg.created_at,
+                    cited_pages=cited_pages,
+                    cited_snippets=cited_snippets,
+                )
             )
-            for msg in messages
-        ]
-        
+
         return ConversationDetailDTO(
             id=conversation.id,
             document_id=conversation.document_id,
-            document_filename="",  # TODO: Obtener desde documento
+            document_filename="",
             created_at=conversation.created_at,
             title=conversation.title,
             messages=message_dtos
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:

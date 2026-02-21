@@ -153,6 +153,10 @@ class ChatWithDocumentUseCase:
                     "conversation_id": conv_id,
                     "message_id": assistant_msg.id,
                     "cited_pages": cited_pages,
+                    "cited_snippets": [
+                        {"page": c.page_number, "text": c.content[:250].strip()}
+                        for c in sorted(relevant_chunks, key=lambda x: (x.page_number, x.chunk_index))
+                    ],
                 }
             except Exception as e:
                 print(f"❌ Error en streaming: {str(e)}")

@@ -2,12 +2,18 @@
  * Chat and conversation related TypeScript types
  */
 
+export interface CitedSnippet {
+    page: number;
+    text: string;
+}
+
 export interface Message {
     id: number;
     role: 'user' | 'assistant';
     content: string;
     created_at: string;
     cited_pages?: number[];
+    cited_snippets?: CitedSnippet[];
 }
 
 export interface ChatRequest {

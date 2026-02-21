@@ -7,6 +7,7 @@ export interface SSECompletionData {
     conversation_id: number;
     message_id: number;
     cited_pages: number[];
+    cited_snippets: { page: number; text: string }[];
 }
 
 export interface SSEOptions {
@@ -67,6 +68,7 @@ export class SSEClient {
                             conversation_id: data.conversation_id,
                             message_id: data.message_id,
                             cited_pages: data.cited_pages ?? [],
+                            cited_snippets: data.cited_snippets ?? [],
                         });
                         this.close();
                         return;
@@ -92,6 +94,7 @@ export class SSEClient {
                             conversation_id: 0,
                             message_id: 0,
                             cited_pages: [],
+                            cited_snippets: [],
                         });
                         this.close();
                         return;

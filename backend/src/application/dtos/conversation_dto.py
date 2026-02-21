@@ -18,6 +18,11 @@ class ChatResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class CitedSnippet(BaseModel):
+    """Fragmento de texto citado junto con su número de página"""
+    page: int
+    text: str   # primeros ~200 chars del chunk
+
 class MessageDTO(BaseModel):
     """DTO para un mensaje individual"""
     id: int
@@ -25,6 +30,7 @@ class MessageDTO(BaseModel):
     content: str
     created_at: datetime
     cited_pages: Optional[List[int]] = None
+    cited_snippets: Optional[List[CitedSnippet]] = None
     
     class Config:
         from_attributes = True

@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { conversationsService } from '@/services';
 import { useApiError } from '@/hooks';
 import { useStreamingResponse } from './useStreamingResponse';
@@ -19,6 +19,9 @@ export function useChat(documentId: number) {
     const [isResetting, setIsResetting] = useState(false);
     const { error, handleError, clearError } = useApiError();
     const streaming = useStreamingResponse();
+    // Temporarily hold citation data between SSE completion and message finalization
+    const pendingCitedPages = useRef<number[]>([]);
+    const pendingCitedSnippets = useRef<{ page: number; text: string }[]>([]);
 
     /**
      * On mount: fetch the single existing conversation for this document (if any)
@@ -75,6 +78,9 @@ export function useChat(documentId: number) {
             streaming.startStreaming(
                 { document_id: documentId, message: messageText },
                 (completionData) => {
+                    // Capture citations from SSE done event
+                    pendingCitedPages.current = completionData.cited_pages ?? [];
+                    pendingCitedSnippets.current = completionData.cited_snippets ?? [];
                     if (completionData.conversation_id) {
                         setCurrentConversationId(completionData.conversation_id);
                     }
@@ -96,7 +102,11 @@ export function useChat(documentId: number) {
                 role: 'assistant',
                 content: streaming.streamingText,
                 created_at: new Date().toISOString(),
+                cited_pages: pendingCitedPages.current.length > 0 ? [...pendingCitedPages.current] : undefined,
+                cited_snippets: pendingCitedSnippets.current.length > 0 ? [...pendingCitedSnippets.current] : undefined,
             };
+            pendingCitedPages.current = [];
+            pendingCitedSnippets.current = [];
             setMessages((prev) => [...prev, assistantMessage]);
             streaming.resetStreaming();
         }

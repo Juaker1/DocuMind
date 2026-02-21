@@ -32,6 +32,19 @@ class DocumentChunkRepository(ABC):
             List[DocumentChunk]: Lista de chunks del documento
         """
         pass
+
+    @abstractmethod
+    async def find_by_ids(self, ids: List[int]) -> List[DocumentChunk]:
+        """
+        Obtiene chunks por sus IDs (para resolver citas del historial).
+
+        Args:
+            ids: Lista de IDs de chunks
+
+        Returns:
+            List[DocumentChunk]: Chunks encontrados
+        """
+        pass
     
     @abstractmethod
     async def search_similar(

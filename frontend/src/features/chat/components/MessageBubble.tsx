@@ -5,6 +5,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { Card, Badge } from '@/components/ui';
 import { formatRelativeTime } from '@/lib/utils';
 import type { Message } from '@/types/chat';
@@ -15,6 +16,10 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
     const isUser = message.role === 'user';
+    const [sourcesOpen, setSourcesOpen] = useState(false);
+
+    const hasCitations = message.cited_pages && message.cited_pages.length > 0;
+    const hasSnippets = message.cited_snippets && message.cited_snippets.length > 0;
 
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -27,7 +32,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     }`}
             >
                 <div className="flex items-start gap-3">
-                    {/* Avatar */}
+                    {/* AI Avatar */}
                     {!isUser && (
                         <div className="flex-shrink-0 rounded-full bg-blue-600 p-2">
                             <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -50,13 +55,50 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                             {message.content}
                         </div>
 
-                        {/* Citations */}
-                        {message.cited_pages && message.cited_pages.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                                {message.cited_pages.map((page) => (
+                        {/* Page citation badges */}
+                        {hasCitations && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Fuentes:</span>
+                                {message.cited_pages!.map((page) => (
                                     <Badge key={page} variant="info" size="sm">
-                                        Página {page}
+                                        Pág. {page}
                                     </Badge>
+                                ))}
+
+                                {/* Toggle snippets button */}
+                                {hasSnippets && (
+                                    <button
+                                        onClick={() => setSourcesOpen(!sourcesOpen)}
+                                        className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors ml-1"
+                                    >
+                                        <svg
+                                            className={`h-3 w-3 transition-transform ${sourcesOpen ? 'rotate-180' : ''}`}
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                        {sourcesOpen ? 'Ocultar' : 'Ver'} fragmentos
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Snippet accordion */}
+                        {hasSnippets && sourcesOpen && (
+                            <div className="mt-2 space-y-2">
+                                {message.cited_snippets!.map((snippet, i) => (
+                                    <div
+                                        key={i}
+                                        className="rounded-lg border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-3 py-2"
+                                    >
+                                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                                            Página {snippet.page}
+                                        </p>
+                                        <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                                            {snippet.text}
+                                            {snippet.text.length >= 250 ? '…' : ''}
+                                        </p>
+                                    </div>
                                 ))}
                             </div>
                         )}

@@ -45,7 +45,17 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
         db_chunks = result.scalars().all()
         
         return [self._to_entity(chunk) for chunk in db_chunks]
-    
+
+    async def find_by_ids(self, ids: List[int]) -> List[DocumentChunk]:
+        """Obtiene chunks por sus IDs para resolver citas del historial"""
+        if not ids:
+            return []
+        result = await self.session.execute(
+            select(DocumentChunkModel).where(DocumentChunkModel.id.in_(ids))
+        )
+        db_chunks = result.scalars().all()
+        return [self._to_entity(chunk) for chunk in db_chunks]
+
     async def search_similar(
         self, 
         embedding: List[float], 
