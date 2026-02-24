@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     app_name: str = "DocuMind"
     debug: bool = True
 
+    # CORS — lista de orígenes permitidos, separados por coma en .env
+    # Ejemplo producción: ALLOWED_ORIGINS=https://app.documind.com
+    allowed_origins: List[str] = ["http://localhost:3000"]
+
     # Auth
     secret_key: str = "change-me-in-production-use-a-long-random-string"
     

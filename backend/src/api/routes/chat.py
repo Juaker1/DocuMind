@@ -11,11 +11,21 @@ from src.application.dtos.conversation_dto import (
     MessageDTO,
     CitedSnippet,
 )
-from src.api.dependencies import get_chat_use_case, get_conversation_repository, get_chunk_repository, get_current_user, get_user_repository
+from src.api.dependencies import (
+    get_chat_use_case,
+    get_conversation_repository,
+    get_chunk_repository,
+    get_current_user,
+    get_user_repository,
+    get_document_repository,
+    get_document_for_current_user,
+)
 from src.domain.repositories.conversation_repository import ConversationRepository
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
 from src.domain.repositories.user_repository import UserRepository
+from src.domain.repositories.document_repository import DocumentRepository
 from src.domain.entities.user import User
+from src.domain.entities.document import Document
 
 router = APIRouter()
 
@@ -23,11 +33,12 @@ router = APIRouter()
 async def stream_chat(
     document_id: int,
     message: str,
-    # SSE via EventSource can't set headers — accept auth tokens as query params
+    # SSE via EventSource no puede enviar headers — tokens van por query param
     token: str = None,
     user_uuid: str = None,
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case),
     user_repo: UserRepository = Depends(get_user_repository),
+    document_repo: DocumentRepository = Depends(get_document_repository),
 ):
     """
     Endpoint de streaming SSE para chat en tiempo real.
@@ -35,7 +46,28 @@ async def stream_chat(
     """
     from src.application.use_cases.create_jwt import decode_access_token
     from src.application.use_cases.get_or_create_anonymous_user import GetOrCreateAnonymousUserUseCase
-    from src.infrastructure.database.connection import AsyncSessionLocal
+
+    # 1. Resolver usuario desde query params (EventSource no soporta headers)
+    user = None
+    if token:
+        payload = decode_access_token(token)
+        if payload:
+            user_id = payload.get("user_id")
+            if user_id:
+                user = await user_repo.find_by_id(int(user_id))
+
+    if user is None and user_uuid:
+        anon_use_case = GetOrCreateAnonymousUserUseCase(user_repo)
+        user = await anon_use_case.execute(user_uuid)
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+
+    # 2. Verificar ownership ANTES de iniciar el stream
+    #    (una vez abierto el stream no podemos devolver códigos HTTP)
+    document = await document_repo.find_by_id(document_id)
+    if not document or document.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
 
     async def event_generator():
         try:
@@ -47,8 +79,8 @@ async def stream_chat(
                 yield f"data: {json.dumps(event)}\n\n"
         except ValueError as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': f'Error interno: {str(e)}'})}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'error': 'Error interno en el servidor'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -64,36 +96,29 @@ async def stream_chat(
 @router.post("/", response_model=ChatResponse)
 async def chat_with_document(
     request: ChatRequest,
-    current_user: User = Depends(get_current_user),
+    document: Document = Depends(get_document_for_current_user),
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
 ):
     """
-    Envía un mensaje para chatear con un documento
-    
-    - **document_id**: ID del documento
-    - **message**: Mensaje del usuario
-    - **conversation_id**: (Opcional) ID de conversación existente
-    
-    Utiliza RAG (Retrieval-Augmented Generation) para responder basándose en el contenido del documento.
+    Envía un mensaje para chatear con un documento.
+    La dependencia get_document_for_current_user verifica autenticación y ownership.
     """
     try:
         response, conversation_id, message_id, cited_pages = await chat_use_case.execute(
-            document_id=request.document_id,
+            document_id=document.id,
             user_message=request.message,
             conversation_id=request.conversation_id
         )
-        
+
         return ChatResponse(
             conversation_id=conversation_id,
             message_id=message_id,
             response=response,
             cited_pages=cited_pages
         )
-    
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en el chat: {str(e)}")
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailDTO)
 async def get_conversation(
@@ -153,36 +178,28 @@ async def get_conversation(
 
 @router.get("/documents/{document_id}/conversations", response_model=List[ConversationDTO])
 async def get_document_conversations(
-    document_id: int,
-    conversation_repo: ConversationRepository = Depends(get_conversation_repository)
+    document: Document = Depends(get_document_for_current_user),
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository),
 ):
     """
-    Obtiene todas las conversaciones de un documento
-    
-    - **document_id**: ID del documento
+    Obtiene todas las conversaciones de un documento (solo si pertenece al usuario actual).
     """
-    try:
-        conversations = await conversation_repo.find_by_document_id(document_id)
-        
-        conversation_dtos = []
-        for conv in conversations:
-            # Contar mensajes
-            messages = await conversation_repo.get_messages(conv.id)
-            
-            conversation_dtos.append(
-                ConversationDTO(
-                    id=conv.id,
-                    document_id=conv.document_id,
-                    created_at=conv.created_at,
-                    title=conv.title,
-                    message_count=len(messages)
-                )
+    conversations = await conversation_repo.find_by_document_id(document.id)
+
+    result = []
+    for conv in conversations:
+        messages = await conversation_repo.get_messages(conv.id)
+        result.append(
+            ConversationDTO(
+                id=conv.id,
+                document_id=conv.document_id,
+                created_at=conv.created_at,
+                title=conv.title,
+                message_count=len(messages)
             )
-        
-        return conversation_dtos
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener conversaciones: {str(e)}")
+        )
+
+    return result
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
@@ -213,25 +230,16 @@ async def delete_conversation(
 
 @router.delete("/documents/{document_id}/conversation")
 async def reset_document_conversation(
-    document_id: int,
-    current_user: User = Depends(get_current_user),
-    conversation_repo: ConversationRepository = Depends(get_conversation_repository)
+    document: Document = Depends(get_document_for_current_user),
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository),
 ):
     """
     Resetea (borra) la única conversación de un documento.
     El próximo mensaje creará una conversación nueva desde cero.
     """
-    try:
-        conversations = await conversation_repo.find_by_document_id(document_id)
-        if not conversations:
-            # Nada que borrar — devolvemos ok igual
-            return {"message": "No hay conversación activa para este documento"}
-        
-        conv = conversations[0]
-        await conversation_repo.delete_conversation(conv.id)
-        return {"message": "Chat reiniciado exitosamente"}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al resetear conversación: {str(e)}")
+    conversations = await conversation_repo.find_by_document_id(document.id)
+    if not conversations:
+        return {"message": "No hay conversación activa para este documento"}
+
+    await conversation_repo.delete_conversation(conversations[0].id)
+    return {"message": "Chat reiniciado exitosamente"}

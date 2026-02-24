@@ -4,12 +4,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.application.use_cases.upload_document import UploadDocumentUseCase
 from src.application.use_cases.process_document import ProcessDocumentUseCase
 from src.application.dtos.document_dto import DocumentUploadResponse, DocumentListItem, DocumentDetail
-from src.api.dependencies import get_document_repository, get_upload_document_use_case, get_process_document_use_case, get_current_user
+from src.api.dependencies import (
+    get_document_repository,
+    get_upload_document_use_case,
+    get_process_document_use_case,
+    get_current_user,
+    get_document_for_current_user,
+)
 from src.domain.repositories.document_repository import DocumentRepository
+from src.domain.entities.user import User
+from src.domain.entities.document import Document
 from src.infrastructure.database.connection import AsyncSessionLocal, get_db
 from src.infrastructure.database.repositories.document_repository_impl import DocumentRepositoryImpl
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
-from src.domain.entities.user import User
 
 
 router = APIRouter()
@@ -126,88 +133,50 @@ async def list_documents(
 
 @router.get("/{document_id}", response_model=DocumentDetail)
 async def get_document(
-    document_id: int,
-    current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepository = Depends(get_document_repository),
+    document: Document = Depends(get_document_for_current_user),
 ):
     """Obtiene los detalles de un documento (solo si pertenece al usuario actual)."""
-    try:
-        document = await document_repo.find_by_id(document_id)
-
-        if not document:
-            raise HTTPException(status_code=404, detail="Documento no encontrado")
-
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Acceso denegado")
-
-        return DocumentDetail(
-            id=document.id,
-            filename=document.filename,
-            file_size=document.file_size,
-            total_pages=document.total_pages,
-            upload_date=document.upload_date,
-            processed=document.processed,
-            conversation_count=0
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener documento: {str(e)}")
+    return DocumentDetail(
+        id=document.id,
+        filename=document.filename,
+        file_size=document.file_size,
+        total_pages=document.total_pages,
+        upload_date=document.upload_date,
+        processed=document.processed,
+        conversation_count=0
+    )
 
 
 @router.post("/{document_id}/process")
 async def process_document(
-    document_id: int,
-    current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepository = Depends(get_document_repository),
+    document: Document = Depends(get_document_for_current_user),
     process_use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case),
 ):
     """Procesa manualmente un documento (genera embeddings). Solo el dueño puede hacerlo."""
     try:
-        document = await document_repo.find_by_id(document_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Documento no encontrado")
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Acceso denegado")
+        if document.processed:
+            raise HTTPException(status_code=400, detail="El documento ya fue procesado")
 
-        chunks = await process_use_case.execute(document_id)
+        chunks = await process_use_case.execute(document.id)
 
         return {
             "message": "Documento procesado exitosamente",
-            "document_id": document_id,
+            "document_id": document.id,
             "chunks_created": len(chunks)
         }
     except HTTPException:
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al procesar documento: {str(e)}")
 
 
 @router.delete("/{document_id}")
 async def delete_document(
-    document_id: int,
-    current_user: User = Depends(get_current_user),
+    document: Document = Depends(get_document_for_current_user),
     document_repo: DocumentRepository = Depends(get_document_repository),
 ):
     """Elimina un documento. Solo el dueño puede eliminarlo."""
-    try:
-        document = await document_repo.find_by_id(document_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Documento no encontrado")
-
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Acceso denegado")
-
-        success = await document_repo.delete(document_id)
-
-        if success:
-            return {"message": "Documento eliminado exitosamente"}
-        else:
-            raise HTTPException(status_code=500, detail="Error al eliminar documento")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al eliminar documento: {str(e)}")
+    success = await document_repo.delete(document.id)
+    if success:
+        return {"message": "Documento eliminado exitosamente"}
+    raise HTTPException(status_code=500, detail="Error al eliminar documento")

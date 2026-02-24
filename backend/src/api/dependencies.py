@@ -20,6 +20,7 @@ from src.application.use_cases.chat_with_document import ChatWithDocumentUseCase
 from src.application.use_cases.get_or_create_anonymous_user import GetOrCreateAnonymousUserUseCase
 from src.application.use_cases.create_jwt import decode_access_token
 from src.domain.entities.user import User
+from src.domain.entities.document import Document
 
 # ============================================================================
 # Repository Dependencies
@@ -126,3 +127,26 @@ async def get_chat_use_case(
         OllamaClient(),
         EmbeddingService(),
     )
+
+# ============================================================================
+# Ownership — verifica que el documento exista Y pertenezca al usuario actual
+# ============================================================================
+
+async def get_document_for_current_user(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    document_repo: DocumentRepository = Depends(get_document_repository),
+) -> Document:
+    """
+    Dependencia reutilizable de ownership:
+    1. Busca el documento por ID.
+    2. Si no existe → 404.
+    3. Si existe pero no pertenece al usuario → 404 (no 403).
+       Un 403 confirmaría que el recurso existe; un 404 no revela nada.
+
+    Uso: document: Document = Depends(get_document_for_current_user)
+    """
+    document = await document_repo.find_by_id(document_id)
+    if not document or document.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    return document
