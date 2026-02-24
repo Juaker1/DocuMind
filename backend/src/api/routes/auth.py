@@ -3,7 +3,8 @@ from typing import Optional
 from src.application.dtos.user_dto import RegisterRequest, LoginRequest, AuthResponse, AuthUserInfo
 from src.application.use_cases.register_user import RegisterUserUseCase
 from src.application.use_cases.login_user import LoginUserUseCase
-from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.domain.repositories.user_repository import UserRepository
+from src.domain.exceptions import InvalidCredentialsError, EmailAlreadyRegisteredError
 from src.api.dependencies import get_user_repository, get_current_user
 from src.domain.entities.user import User
 
@@ -13,14 +14,17 @@ router = APIRouter()
 @router.post("/register", response_model=AuthResponse, status_code=201)
 async def register(
     body: RegisterRequest,
-    user_repo: UserRepositoryImpl = Depends(get_user_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
 ):
     """
     Registra un usuario con email y contraseña.
     Si ya tenía documentos como anónimo (via uuid), los preserva automáticamente.
     """
-    use_case = RegisterUserUseCase(user_repo)
-    result = await use_case.execute(body)
+    try:
+        use_case = RegisterUserUseCase(user_repo)
+        result = await use_case.execute(body)
+    except EmailAlreadyRegisteredError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     user = result["user"]
     return AuthResponse(
         token=result["token"],
@@ -36,11 +40,14 @@ async def register(
 @router.post("/login", response_model=AuthResponse)
 async def login(
     body: LoginRequest,
-    user_repo: UserRepositoryImpl = Depends(get_user_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
 ):
     """Inicia sesión con email y contraseña, devuelve JWT."""
-    use_case = LoginUserUseCase(user_repo)
-    result = await use_case.execute(body)
+    try:
+        use_case = LoginUserUseCase(user_repo)
+        result = await use_case.execute(body)
+    except InvalidCredentialsError as e:
+        raise HTTPException(status_code=401, detail=str(e))
     user = result["user"]
     return AuthResponse(
         token=result["token"],
@@ -67,7 +74,7 @@ async def me(current_user: User = Depends(get_current_user)):
 @router.delete("/account", status_code=204)
 async def delete_account(
     current_user: User = Depends(get_current_user),
-    user_repo: UserRepositoryImpl = Depends(get_user_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
 ):
     """
     Elimina la cuenta del usuario y en cascada todos sus documentos,

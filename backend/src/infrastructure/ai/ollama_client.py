@@ -3,10 +3,11 @@ import ollama
 from typing import AsyncGenerator
 from typing import List, Tuple
 from src.config.settings import get_settings
+from src.application.ports import LLMClientPort
 
 settings = get_settings()
 
-class OllamaClient:
+class OllamaClient(LLMClientPort):
     """
     Cliente para interactuar con Ollama
     Maneja la generación de respuestas y embeddings

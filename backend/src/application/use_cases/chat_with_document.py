@@ -1,10 +1,10 @@
+import re
 from typing import Optional, List, Tuple, AsyncGenerator
 from datetime import datetime
 from src.domain.entities.conversation import Conversation, Message
 from src.domain.repositories.conversation_repository import ConversationRepository
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
-from src.infrastructure.ai.ollama_client import OllamaClient
-from src.infrastructure.ai.embeddings import EmbeddingService
+from src.application.ports import LLMClientPort, EmbeddingServicePort
 
 
 class ChatWithDocumentUseCase:
@@ -13,12 +13,42 @@ class ChatWithDocumentUseCase:
     def __init__(
         self,
         conversation_repository: ConversationRepository,
-        chunk_repository: DocumentChunkRepository
+        chunk_repository: DocumentChunkRepository,
+        llm_client: LLMClientPort,
+        embedding_service: EmbeddingServicePort,
     ):
         self.conversation_repository = conversation_repository
         self.chunk_repository = chunk_repository
-        self.ollama_client = OllamaClient()
-        self.embedding_service = EmbeddingService()
+        self.ollama_client = llm_client
+        self.embedding_service = embedding_service
+
+    @staticmethod
+    def parse_citations(response: str) -> Tuple[str, List[int]]:
+        """
+        Extrae los IDs de chunks declarados por el LLM y devuelve el texto limpio.
+        Busca el marcador @@FUENTES:[id1,id2,...]@@ al final de la respuesta.
+        También elimina patrones residuales de páginas que el LLM pueda añadir.
+
+        Returns:
+            (texto_limpio, lista_de_ids_usados) — lista vacía si el LLM no declaró fuentes.
+        """
+        pattern = r'@@FUENTES:\[([^\]]*)\]@@'
+        match = re.search(pattern, response)
+        if match:
+            ids_str = match.group(1)
+            try:
+                used_ids = [int(x.strip()) for x in ids_str.split(',') if x.strip()]
+            except ValueError:
+                used_ids = []
+            clean = re.sub(pattern, '', response).strip()
+        else:
+            used_ids = []
+            clean = response
+
+        # Red de seguridad: eliminar patrones de resumen de páginas residuales
+        clean = re.sub(r'\[\s*[Pp][áa]gina[s]?[\s\d,yaAY\-]+\]', '', clean).strip()
+
+        return clean, used_ids
 
     async def _prepare_context(
         self,
@@ -94,7 +124,7 @@ class ChatWithDocumentUseCase:
             print("🤖 Respuesta generada por LLM")
 
             # Nivel 2: parsear qué chunks declaró usar el LLM
-            clean_response, used_ids = self.ollama_client.parse_citations(response)
+            clean_response, used_ids = self.parse_citations(response)
             if used_ids:
                 used_chunks = [c for c in relevant_chunks if c.id in used_ids]
                 if not used_chunks:  # fallback si el LLM declaró IDs inexistentes
@@ -154,7 +184,7 @@ class ChatWithDocumentUseCase:
                     yield {"chunk": token}
 
                 # Nivel 2: parsear qué chunks declaró usar el LLM
-                clean_response, used_ids = self.ollama_client.parse_citations(full_response)
+                clean_response, used_ids = self.parse_citations(full_response)
                 if used_ids:
                     used_chunks = [c for c in relevant_chunks if c.id in used_ids]
                     if not used_chunks:  # fallback si el LLM declaró IDs inexistentes

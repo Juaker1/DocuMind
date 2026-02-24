@@ -1,12 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
 from typing import List
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.application.use_cases.upload_document import UploadDocumentUseCase
 from src.application.use_cases.process_document import ProcessDocumentUseCase
 from src.application.dtos.document_dto import DocumentUploadResponse, DocumentListItem, DocumentDetail
-from src.api.dependencies import get_document_repository, get_current_user
+from src.api.dependencies import get_document_repository, get_upload_document_use_case, get_process_document_use_case, get_current_user
+from src.domain.repositories.document_repository import DocumentRepository
+from src.infrastructure.database.connection import AsyncSessionLocal, get_db
 from src.infrastructure.database.repositories.document_repository_impl import DocumentRepositoryImpl
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
-from src.infrastructure.database.connection import AsyncSessionLocal
 from src.domain.entities.user import User
 
 
@@ -17,6 +19,8 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    upload_use_case: UploadDocumentUseCase = Depends(get_upload_document_use_case),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Sube un documento PDF para ser procesado.
@@ -33,25 +37,20 @@ async def upload_document(
     file.file.seek(0)
 
     try:
-        async with AsyncSessionLocal() as session:
-            try:
-                document_repo = DocumentRepositoryImpl(session)
-                chunk_repo = DocumentChunkRepositoryImpl(session)
-                upload_use_case = UploadDocumentUseCase(document_repo, chunk_repo)
+        document = await upload_use_case.execute(
+            file=file.file,
+            filename=file.filename,
+            file_size=file_size,
+            user_id=current_user.id,
+        )
 
-                document = await upload_use_case.execute(
-                    file=file.file,
-                    filename=file.filename,
-                    file_size=file_size,
-                    user_id=current_user.id,  # Tag with owner
-                )
-
-                await session.commit()
-                print(f"💾 Documento {document.id} guardado para usuario {current_user.id}")
-
-            except Exception:
-                await session.rollback()
-                raise
+        # Commit explícito ANTES de programar el background task.
+        # get_db hace commit solo después de que el handler retorna,
+        # pero los background tasks corren ANTES de ese cleanup.
+        # Sin este commit, el background task buscaría un documento
+        # que aún no existe en la DB.
+        await db.commit()
+        print(f"💾 Documento {document.id} guardado y committeado para usuario {current_user.id}")
 
         background_tasks.add_task(process_document_background, document.id)
 
@@ -73,13 +72,22 @@ async def upload_document(
 async def process_document_background(document_id: int):
     """Procesa el documento en background con su PROPIA sesión de BD."""
     import traceback
+    from src.infrastructure.document_processing.pdf_processor import PDFProcessor
+    from src.infrastructure.document_processing.chunker import TextChunker
+    from src.infrastructure.ai.embeddings import EmbeddingService
 
     print(f"🔄 Iniciando procesamiento en background para documento {document_id}")
     async with AsyncSessionLocal() as session:
         try:
             document_repo = DocumentRepositoryImpl(session)
             chunk_repo = DocumentChunkRepositoryImpl(session)
-            use_case = ProcessDocumentUseCase(document_repo, chunk_repo)
+            use_case = ProcessDocumentUseCase(
+                document_repo,
+                chunk_repo,
+                PDFProcessor(),
+                TextChunker(),
+                EmbeddingService(),
+            )
             chunks = await use_case.execute(document_id)
             await session.commit()
             print(f"✅ Background: documento {document_id} procesado con {len(chunks)} chunks")
@@ -95,27 +103,11 @@ async def process_document_background(document_id: int):
 @router.get("/", response_model=List[DocumentListItem])
 async def list_documents(
     current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
+    document_repo: DocumentRepository = Depends(get_document_repository),
 ):
     """Lista los documentos del usuario actual (filtrado por user_id)."""
-    from sqlalchemy import select, exists
-    from src.infrastructure.database.models import DocumentModel, ConversationModel
-
     try:
-        conv_exists = (
-            select(ConversationModel.id)
-            .where(ConversationModel.document_id == DocumentModel.id)
-            .correlate(DocumentModel)
-            .exists()
-        )
-
-        stmt = (
-            select(DocumentModel, conv_exists.label("has_conversation"))
-            .where(DocumentModel.user_id == current_user.id)
-        )
-        result = await document_repo.session.execute(stmt)
-        rows = result.all()
-
+        rows = await document_repo.find_with_conversation_status(current_user.id)
         return [
             DocumentListItem(
                 id=doc.id,
@@ -124,7 +116,7 @@ async def list_documents(
                 total_pages=doc.total_pages,
                 upload_date=doc.upload_date,
                 processed=doc.processed,
-                has_conversation=bool(has_conv),
+                has_conversation=has_conv,
             )
             for doc, has_conv in rows
         ]
@@ -136,7 +128,7 @@ async def list_documents(
 async def get_document(
     document_id: int,
     current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
+    document_repo: DocumentRepository = Depends(get_document_repository),
 ):
     """Obtiene los detalles de un documento (solo si pertenece al usuario actual)."""
     try:
@@ -167,7 +159,8 @@ async def get_document(
 async def process_document(
     document_id: int,
     current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
+    document_repo: DocumentRepository = Depends(get_document_repository),
+    process_use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case),
 ):
     """Procesa manualmente un documento (genera embeddings). Solo el dueño puede hacerlo."""
     try:
@@ -177,16 +170,7 @@ async def process_document(
         if document.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Acceso denegado")
 
-        async with AsyncSessionLocal() as session:
-            try:
-                doc_repo2 = DocumentRepositoryImpl(session)
-                chunk_repo = DocumentChunkRepositoryImpl(session)
-                use_case = ProcessDocumentUseCase(doc_repo2, chunk_repo)
-                chunks = await use_case.execute(document_id)
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
+        chunks = await process_use_case.execute(document_id)
 
         return {
             "message": "Documento procesado exitosamente",
@@ -205,7 +189,7 @@ async def process_document(
 async def delete_document(
     document_id: int,
     current_user: User = Depends(get_current_user),
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
+    document_repo: DocumentRepository = Depends(get_document_repository),
 ):
     """Elimina un documento. Solo el dueño puede eliminarlo."""
     try:

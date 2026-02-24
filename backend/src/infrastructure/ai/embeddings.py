@@ -1,7 +1,8 @@
 from typing import List
 from src.infrastructure.ai.ollama_client import OllamaClient
+from src.application.ports import EmbeddingServicePort
 
-class EmbeddingService:
+class EmbeddingService(EmbeddingServicePort):
     """
     Servicio para generar embeddings usando Ollama
     """

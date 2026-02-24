@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from src.domain.entities.document import Document
 
 class DocumentRepository(ABC):
@@ -58,6 +58,22 @@ class DocumentRepository(ABC):
         Returns:
             bool: True si se eliminó correctamente
         """
+
+    @abstractmethod
+    async def find_with_conversation_status(
+        self, user_id: int
+    ) -> List[Tuple["Document", bool]]:
+        """
+        Devuelve todos los documentos del usuario junto con un flag
+        que indica si ya tiene al menos una conversación creada.
+
+        Args:
+            user_id: ID del usuario propietario
+
+        Returns:
+            List of (Document, has_conversation)
+        """
+        pass
         pass
     
     @abstractmethod

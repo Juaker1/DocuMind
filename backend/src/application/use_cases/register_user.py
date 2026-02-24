@@ -1,7 +1,7 @@
-from fastapi import HTTPException
 from passlib.context import CryptContext
 from src.domain.entities.user import User
-from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.domain.repositories.user_repository import UserRepository
+from src.domain.exceptions import EmailAlreadyRegisteredError
 from src.application.dtos.user_dto import RegisterRequest
 from src.application.use_cases.create_jwt import create_access_token
 
@@ -14,14 +14,14 @@ class RegisterUserUseCase:
     Los documentos/conversaciones ya vinculados al user_id se preservan sin migración.
     """
 
-    def __init__(self, user_repo: UserRepositoryImpl):
+    def __init__(self, user_repo: UserRepository):
         self.user_repo = user_repo
 
     async def execute(self, req: RegisterRequest) -> dict:
         # 1. Check email not taken
         existing = await self.user_repo.find_by_email(req.email)
         if existing is not None:
-            raise HTTPException(status_code=409, detail="El email ya está registrado")
+            raise EmailAlreadyRegisteredError(req.email)
 
         # 2. Find the anonymous user by UUID
         user = await self.user_repo.find_by_uuid(req.uuid)

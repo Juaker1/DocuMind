@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, exists
 from src.domain.entities.document import Document
 from src.domain.repositories.document_repository import DocumentRepository
 from src.infrastructure.database.models import DocumentModel
@@ -96,3 +96,23 @@ class DocumentRepositoryImpl(DocumentRepository):
             processed=db_document.processed,
             user_id=db_document.user_id
         )
+
+    async def find_with_conversation_status(
+        self, user_id: int
+    ) -> List[Tuple[Document, bool]]:
+        """Devuelve documentos del usuario con flag de si tienen conversación."""
+        from src.infrastructure.database.models import ConversationModel
+
+        conv_exists = (
+            select(ConversationModel.id)
+            .where(ConversationModel.document_id == DocumentModel.id)
+            .correlate(DocumentModel)
+            .exists()
+        )
+        stmt = (
+            select(DocumentModel, conv_exists.label("has_conversation"))
+            .where(DocumentModel.user_id == user_id)
+        )
+        result = await self.session.execute(stmt)
+        rows = result.all()
+        return [(self._to_entity(doc), bool(has_conv)) for doc, has_conv in rows]

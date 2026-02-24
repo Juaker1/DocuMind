@@ -3,10 +3,11 @@ from docling.document_converter import DocumentConverter
 from pypdf import PdfReader
 import os
 from src.config.settings import get_settings
+from src.application.ports import PDFProcessorPort
 
 settings = get_settings()
 
-class PDFProcessor:
+class PDFProcessor(PDFProcessorPort):
     """
     Procesador de documentos PDF usando Docling como primario y pypdf como fallback
     Extrae texto, detecta estructura (títulos, tablas, etc.)

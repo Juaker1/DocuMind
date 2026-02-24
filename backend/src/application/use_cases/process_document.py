@@ -3,9 +3,7 @@ from src.domain.entities.document import Document
 from src.domain.entities.document_chunk import DocumentChunk
 from src.domain.repositories.document_repository import DocumentRepository
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
-from src.infrastructure.document_processing.pdf_processor import PDFProcessor
-from src.infrastructure.document_processing.chunker import TextChunker
-from src.infrastructure.ai.embeddings import EmbeddingService
+from src.application.ports import PDFProcessorPort, TextChunkerPort, EmbeddingServicePort
 
 class ProcessDocumentUseCase:
     """Caso de uso para procesar un documento y generar embeddings"""
@@ -13,13 +11,16 @@ class ProcessDocumentUseCase:
     def __init__(
         self,
         document_repository: DocumentRepository,
-        chunk_repository: DocumentChunkRepository
+        chunk_repository: DocumentChunkRepository,
+        pdf_processor: PDFProcessorPort,
+        chunker: TextChunkerPort,
+        embedding_service: EmbeddingServicePort,
     ):
         self.document_repository = document_repository
         self.chunk_repository = chunk_repository
-        self.pdf_processor = PDFProcessor()
-        self.chunker = TextChunker()
-        self.embedding_service = EmbeddingService()
+        self.pdf_processor = pdf_processor
+        self.chunker = chunker
+        self.embedding_service = embedding_service
     
     async def execute(self, document_id: int) -> List[DocumentChunk]:
         """

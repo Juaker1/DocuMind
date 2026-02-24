@@ -1,9 +1,10 @@
 from typing import List, Tuple
 from src.config.settings import get_settings
+from src.application.ports import TextChunkerPort
 
 settings = get_settings()
 
-class TextChunker:
+class TextChunker(TextChunkerPort):
     """
     Divide texto en chunks con overlap para embeddings
     """

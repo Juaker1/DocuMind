@@ -1,5 +1,5 @@
 from src.domain.entities.user import User
-from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.domain.repositories.user_repository import UserRepository
 
 
 class GetOrCreateAnonymousUserUseCase:
@@ -8,7 +8,7 @@ class GetOrCreateAnonymousUserUseCase:
     Siempre retorna un User con un ID válido en la BD.
     """
 
-    def __init__(self, user_repo: UserRepositoryImpl):
+    def __init__(self, user_repo: UserRepository):
         self.user_repo = user_repo
 
     async def execute(self, uuid: str) -> User:

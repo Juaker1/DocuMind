@@ -12,9 +12,9 @@ from src.application.dtos.conversation_dto import (
     CitedSnippet,
 )
 from src.api.dependencies import get_chat_use_case, get_conversation_repository, get_chunk_repository, get_current_user, get_user_repository
-from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
-from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
-from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.domain.repositories.conversation_repository import ConversationRepository
+from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
+from src.domain.repositories.user_repository import UserRepository
 from src.domain.entities.user import User
 
 router = APIRouter()
@@ -27,7 +27,7 @@ async def stream_chat(
     token: str = None,
     user_uuid: str = None,
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case),
-    user_repo: UserRepositoryImpl = Depends(get_user_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
 ):
     """
     Endpoint de streaming SSE para chat en tiempo real.
@@ -98,8 +98,8 @@ async def chat_with_document(
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailDTO)
 async def get_conversation(
     conversation_id: int,
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository),
-    chunk_repo: DocumentChunkRepositoryImpl = Depends(get_chunk_repository),
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository),
+    chunk_repo: DocumentChunkRepository = Depends(get_chunk_repository),
 ):
     """
     Obtiene el historial completo de una conversación, incluyendo citas de páginas.
@@ -154,7 +154,7 @@ async def get_conversation(
 @router.get("/documents/{document_id}/conversations", response_model=List[ConversationDTO])
 async def get_document_conversations(
     document_id: int,
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository)
 ):
     """
     Obtiene todas las conversaciones de un documento
@@ -188,7 +188,7 @@ async def get_document_conversations(
 async def delete_conversation(
     conversation_id: int,
     current_user: User = Depends(get_current_user),
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository)
 ):
     """
     Elimina una conversación y todos sus mensajes.
@@ -215,7 +215,7 @@ async def delete_conversation(
 async def reset_document_conversation(
     document_id: int,
     current_user: User = Depends(get_current_user),
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository)
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository)
 ):
     """
     Resetea (borra) la única conversación de un documento.

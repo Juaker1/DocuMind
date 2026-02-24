@@ -6,6 +6,14 @@ from src.infrastructure.database.repositories.document_repository_impl import Do
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
 from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
 from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.infrastructure.document_processing.pdf_processor import PDFProcessor
+from src.infrastructure.document_processing.chunker import TextChunker
+from src.infrastructure.ai.embeddings import EmbeddingService
+from src.infrastructure.ai.ollama_client import OllamaClient
+from src.domain.repositories.document_repository import DocumentRepository
+from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
+from src.domain.repositories.conversation_repository import ConversationRepository
+from src.domain.repositories.user_repository import UserRepository
 from src.application.use_cases.upload_document import UploadDocumentUseCase
 from src.application.use_cases.process_document import ProcessDocumentUseCase
 from src.application.use_cases.chat_with_document import ChatWithDocumentUseCase
@@ -19,22 +27,22 @@ from src.domain.entities.user import User
 
 async def get_document_repository(
     db: AsyncSession = Depends(get_db)
-) -> DocumentRepositoryImpl:
+) -> DocumentRepository:
     return DocumentRepositoryImpl(db)
 
 async def get_chunk_repository(
     db: AsyncSession = Depends(get_db)
-) -> DocumentChunkRepositoryImpl:
+) -> DocumentChunkRepository:
     return DocumentChunkRepositoryImpl(db)
 
 async def get_conversation_repository(
     db: AsyncSession = Depends(get_db)
-) -> ConversationRepositoryImpl:
+) -> ConversationRepository:
     return ConversationRepositoryImpl(db)
 
 async def get_user_repository(
     db: AsyncSession = Depends(get_db)
-) -> UserRepositoryImpl:
+) -> UserRepository:
     return UserRepositoryImpl(db)
 
 # ============================================================================
@@ -85,19 +93,36 @@ async def get_current_user(
 # ============================================================================
 
 async def get_upload_document_use_case(
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
-    chunk_repo: DocumentChunkRepositoryImpl = Depends(get_chunk_repository)
+    document_repo: DocumentRepository = Depends(get_document_repository),
+    chunk_repo: DocumentChunkRepository = Depends(get_chunk_repository)
 ) -> UploadDocumentUseCase:
-    return UploadDocumentUseCase(document_repo, chunk_repo)
+    return UploadDocumentUseCase(
+        document_repo,
+        chunk_repo,
+        PDFProcessor(),
+        TextChunker(),
+        EmbeddingService(),
+    )
 
 async def get_process_document_use_case(
-    document_repo: DocumentRepositoryImpl = Depends(get_document_repository),
-    chunk_repo: DocumentChunkRepositoryImpl = Depends(get_chunk_repository)
+    document_repo: DocumentRepository = Depends(get_document_repository),
+    chunk_repo: DocumentChunkRepository = Depends(get_chunk_repository)
 ) -> ProcessDocumentUseCase:
-    return ProcessDocumentUseCase(document_repo, chunk_repo)
+    return ProcessDocumentUseCase(
+        document_repo,
+        chunk_repo,
+        PDFProcessor(),
+        TextChunker(),
+        EmbeddingService(),
+    )
 
 async def get_chat_use_case(
-    conversation_repo: ConversationRepositoryImpl = Depends(get_conversation_repository),
-    chunk_repo: DocumentChunkRepositoryImpl = Depends(get_chunk_repository)
+    conversation_repo: ConversationRepository = Depends(get_conversation_repository),
+    chunk_repo: DocumentChunkRepository = Depends(get_chunk_repository)
 ) -> ChatWithDocumentUseCase:
-    return ChatWithDocumentUseCase(conversation_repo, chunk_repo)
+    return ChatWithDocumentUseCase(
+        conversation_repo,
+        chunk_repo,
+        OllamaClient(),
+        EmbeddingService(),
+    )
