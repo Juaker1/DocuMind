@@ -1,6 +1,7 @@
 from typing import List
 from src.infrastructure.ai.ollama_client import OllamaClient
 from src.application.ports import EmbeddingServicePort
+from src.domain.value_objects.embedding_vector import EmbeddingVector
 
 class EmbeddingService(EmbeddingServicePort):
     """
@@ -10,7 +11,7 @@ class EmbeddingService(EmbeddingServicePort):
     def __init__(self):
         self.ollama_client = OllamaClient()
     
-    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def generate_embeddings(self, texts: List[str]) -> List[EmbeddingVector]:
         """
         Genera embeddings para una lista de textos
         
@@ -18,21 +19,21 @@ class EmbeddingService(EmbeddingServicePort):
             texts: Lista de textos a embedear
             
         Returns:
-            Lista de vectores de embedding
+            Lista de EmbeddingVector
         """
         embeddings = []
         
         for text in texts:
             if text.strip():  # Solo procesar textos no vacíos
-                embedding = self.ollama_client.generate_embedding(text)
-                embeddings.append(embedding)
+                raw = self.ollama_client.generate_embedding(text)
+                embeddings.append(EmbeddingVector.from_list(raw))
             else:
                 # Para textos vacíos, usar un vector de ceros
-                embeddings.append([0.0] * 768)  # nomic-embed-text usa 768 dims
+                embeddings.append(EmbeddingVector.zeros(768))  # nomic-embed-text usa 768 dims
         
         return embeddings
     
-    def generate_single_embedding(self, text: str) -> List[float]:
+    def generate_single_embedding(self, text: str) -> EmbeddingVector:
         """
         Genera embedding para un solo texto
         
@@ -40,9 +41,10 @@ class EmbeddingService(EmbeddingServicePort):
             text: Texto a embedear
             
         Returns:
-            Vector de embedding
+            EmbeddingVector
         """
         if not text.strip():
-            return [0.0] * 768
+            return EmbeddingVector.zeros(768)
         
-        return self.ollama_client.generate_embedding(text)
+        raw = self.ollama_client.generate_embedding(text)
+        return EmbeddingVector.from_list(raw)

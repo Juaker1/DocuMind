@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from src.domain.entities.document_chunk import DocumentChunk
+from src.domain.value_objects.embedding_vector import EmbeddingVector
 
 class DocumentChunkRepository(ABC):
     """
@@ -48,19 +49,19 @@ class DocumentChunkRepository(ABC):
     
     @abstractmethod
     async def search_similar(
-        self, 
-        embedding: List[float], 
+        self,
+        embedding: EmbeddingVector,
         document_id: int,
         limit: int = 5
     ) -> List[DocumentChunk]:
         """
         Busca los chunks más similares usando búsqueda vectorial
-        
+
         Args:
             embedding: Vector de embedding de la consulta
             document_id: ID del documento donde buscar
             limit: Número máximo de resultados
-            
+
         Returns:
             List[DocumentChunk]: Chunks más relevantes ordenados por similaridad
         """

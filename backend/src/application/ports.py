@@ -11,6 +11,7 @@ estas interfaces.
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple
+from src.domain.value_objects.embedding_vector import EmbeddingVector
 
 
 class PDFProcessorPort(ABC):
@@ -52,12 +53,12 @@ class EmbeddingServicePort(ABC):
     """Puerto para generar embeddings de texto."""
 
     @abstractmethod
-    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def generate_embeddings(self, texts: List[str]) -> List[EmbeddingVector]:
         """Genera embeddings para una lista de textos."""
         ...
 
     @abstractmethod
-    def generate_single_embedding(self, text: str) -> List[float]:
+    def generate_single_embedding(self, text: str) -> EmbeddingVector:
         """Genera embedding para un único texto."""
         ...
 

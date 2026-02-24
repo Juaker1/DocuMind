@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, text
 from src.domain.entities.document_chunk import DocumentChunk
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
+from src.domain.value_objects.embedding_vector import EmbeddingVector
 from src.infrastructure.database.models import DocumentChunkModel
 
 class DocumentChunkRepositoryImpl(DocumentChunkRepository):
@@ -22,7 +23,7 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
                 content=chunk.content,
                 page_number=chunk.page_number,
                 chunk_index=chunk.chunk_index,
-                embedding=chunk.embedding
+                embedding=chunk.embedding.to_list() if chunk.embedding else None
             )
             db_chunks.append(db_chunk)
             self.session.add(db_chunk)
@@ -57,8 +58,8 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
         return [self._to_entity(chunk) for chunk in db_chunks]
 
     async def search_similar(
-        self, 
-        embedding: List[float], 
+        self,
+        embedding: EmbeddingVector,
         document_id: int,
         limit: int = 5
     ) -> List[DocumentChunk]:
@@ -66,8 +67,8 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
         Busca los chunks más similares usando búsqueda vectorial con pgvector
         Utiliza el operador <=> para calcular distancia L2
         """
-        # Convertir embedding a formato string para PostgreSQL
-        embedding_str = f"[{','.join(map(str, embedding))}]"
+        # Serializar EmbeddingVector al formato que espera pgvector
+        embedding_str = embedding.to_db_string()
         
         # Query usando pgvector para búsqueda de similaridad
         # IMPORTANTE: usar bindparam con literal_column para evitar conflictos de placeholders
@@ -114,7 +115,7 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
                 content=row[2],
                 page_number=row[3],
                 chunk_index=row[4],
-                embedding=embedding_value
+                embedding=EmbeddingVector.from_list(embedding_value) if embedding_value else None
             )
             chunks.append(chunk)
         
@@ -152,5 +153,5 @@ class DocumentChunkRepositoryImpl(DocumentChunkRepository):
             content=db_chunk.content,
             page_number=db_chunk.page_number,
             chunk_index=db_chunk.chunk_index,
-            embedding=embedding_value
+            embedding=EmbeddingVector.from_list(embedding_value) if embedding_value else None
         )

@@ -1,5 +1,7 @@
 from typing import Optional
 from dataclasses import dataclass
+from src.domain.value_objects.embedding_vector import EmbeddingVector
+
 
 @dataclass
 class DocumentChunk:
@@ -19,8 +21,8 @@ class DocumentChunk:
     page_number: int
     chunk_index: int
     id: Optional[int] = None
-    embedding: Optional[list[float]] = None
-    
+    embedding: Optional[EmbeddingVector] = None
+
     def has_embedding(self) -> bool:
         """Verifica si el chunk tiene embedding"""
-        return self.embedding is not None and len(self.embedding) > 0
+        return self.embedding is not None and self.embedding.dimensions > 0

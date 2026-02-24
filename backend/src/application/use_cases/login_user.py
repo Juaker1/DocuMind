@@ -1,6 +1,7 @@
 from passlib.context import CryptContext
 from src.domain.repositories.user_repository import UserRepository
 from src.domain.exceptions import InvalidCredentialsError
+from src.domain.value_objects.email import Email
 from src.application.dtos.user_dto import LoginRequest
 from src.application.use_cases.create_jwt import create_access_token
 
@@ -12,8 +13,11 @@ class LoginUserUseCase:
         self.user_repo = user_repo
 
     async def execute(self, req: LoginRequest) -> dict:
+        # 0. Validar formato de email a nivel de dominio
+        email = Email(req.email)
+
         # 1. Find user by email
-        user = await self.user_repo.find_by_email(req.email)
+        user = await self.user_repo.find_by_email(email.value)
         if user is None:
             raise InvalidCredentialsError()
 
