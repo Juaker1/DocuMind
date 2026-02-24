@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     allowed_extensions: List[str] = [".pdf"]
     
     # Embedding & Chunking
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
+    chunk_size: int = 1500
+    chunk_overlap: int = 300
     
     model_config = SettingsConfigDict(
         env_file=".env",

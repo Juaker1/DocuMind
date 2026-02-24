@@ -8,6 +8,7 @@ export interface SSECompletionData {
     message_id: number;
     cited_pages: number[];
     cited_snippets: { page: number; text: string }[];
+    clean_response?: string;  // Respuesta limpia sin el marcador @@FUENTES:[]@@
 }
 
 export interface SSEOptions {
@@ -69,6 +70,7 @@ export class SSEClient {
                             message_id: data.message_id,
                             cited_pages: data.cited_pages ?? [],
                             cited_snippets: data.cited_snippets ?? [],
+                            clean_response: data.clean_response,
                         });
                         this.close();
                         return;

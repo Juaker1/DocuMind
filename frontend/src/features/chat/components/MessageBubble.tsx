@@ -21,6 +21,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     const hasCitations = message.cited_pages && message.cited_pages.length > 0;
     const hasSnippets = message.cited_snippets && message.cited_snippets.length > 0;
 
+    // Nivel 3: agrupar snippets por página para mostrar una sección por página única
+    const snippetsByPage: Record<number, string[]> = {};
+    if (hasSnippets) {
+        for (const snippet of message.cited_snippets!) {
+            if (!snippetsByPage[snippet.page]) snippetsByPage[snippet.page] = [];
+            snippetsByPage[snippet.page].push(snippet.text);
+        }
+    }
+    const groupedPages = Object.keys(snippetsByPage).map(Number).sort((a, b) => a - b);
+
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
             <Card
@@ -83,21 +93,27 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                             </div>
                         )}
 
-                        {/* Snippet accordion */}
+                        {/* Snippet accordion — agrupado por página (Level 3) */}
                         {hasSnippets && sourcesOpen && (
                             <div className="mt-2 space-y-2">
-                                {message.cited_snippets!.map((snippet, i) => (
+                                {groupedPages.map((page) => (
                                     <div
-                                        key={i}
+                                        key={page}
                                         className="rounded-lg border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-3 py-2"
                                     >
                                         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                                            Página {snippet.page}
+                                            Página {page}
                                         </p>
-                                        <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
-                                            {snippet.text}
-                                            {snippet.text.length >= 250 ? '…' : ''}
-                                        </p>
+                                        {snippetsByPage[page].map((text, i) => (
+                                            <p
+                                                key={i}
+                                                className={`text-xs text-gray-700 dark:text-gray-300 leading-relaxed ${
+                                                    i > 0 ? 'mt-1 pt-1 border-t border-blue-100 dark:border-blue-800' : ''
+                                                }`}
+                                            >
+                                                {text}{text.length >= 250 ? '…' : ''}
+                                            </p>
+                                        ))}
                                     </div>
                                 ))}
                             </div>

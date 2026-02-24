@@ -57,15 +57,16 @@ class ChatWithDocumentUseCase:
         relevant_chunks = await self.chunk_repository.search_similar(
             embedding=query_embedding,
             document_id=document_id,
-            limit=5,
+            limit=15,
         )
         print(f"🔍 Encontrados {len(relevant_chunks)} chunks relevantes")
 
         if not relevant_chunks:
             raise ValueError("El documento no está procesado o no tiene contenido.")
 
-        context_chunks: List[Tuple[str, int]] = [
-            (chunk.content, chunk.page_number) for chunk in relevant_chunks
+        # Incluir ID del chunk para que el LLM pueda declarar cuáles usó
+        context_chunks: List[Tuple[str, int, int]] = [
+            (chunk.content, chunk.page_number, chunk.id) for chunk in relevant_chunks
         ]
         cited_pages = sorted(list(set(chunk.page_number for chunk in relevant_chunks)))
 
@@ -92,17 +93,32 @@ class ChatWithDocumentUseCase:
             )
             print("🤖 Respuesta generada por LLM")
 
+            # Nivel 2: parsear qué chunks declaró usar el LLM
+            clean_response, used_ids = self.ollama_client.parse_citations(response)
+            if used_ids:
+                used_chunks = [c for c in relevant_chunks if c.id in used_ids]
+                if not used_chunks:  # fallback si el LLM declaró IDs inexistentes
+                    used_chunks = relevant_chunks
+                    clean_response = response
+                print(f"🎯 Chunks declarados por LLM: {used_ids} → {len(used_chunks)} válidos")
+            else:
+                used_chunks = relevant_chunks
+                clean_response = response
+                print("⚠️ LLM no declaró fuentes, usando todos los chunks")
+
+            cited_pages = sorted(list(set(c.page_number for c in used_chunks)))
+
             assistant_msg = Message(
                 conversation_id=conv_id,
                 role="assistant",
-                content=response,
+                content=clean_response,
                 created_at=datetime.now(),
-                cited_chunks=[chunk.id for chunk in relevant_chunks],
+                cited_chunks=[c.id for c in used_chunks],
             )
             assistant_msg = await self.conversation_repository.save_message(assistant_msg)
             print("✅ Chat completado exitosamente")
 
-            return response, conv_id, assistant_msg.id, cited_pages
+            return clean_response, conv_id, assistant_msg.id, cited_pages
 
         except ValueError as ve:
             print(f"❌ Error de validación en chat: {str(ve)}")
@@ -137,13 +153,28 @@ class ChatWithDocumentUseCase:
                     full_response += token
                     yield {"chunk": token}
 
-                # Guardar mensaje del asistente una vez completado
+                # Nivel 2: parsear qué chunks declaró usar el LLM
+                clean_response, used_ids = self.ollama_client.parse_citations(full_response)
+                if used_ids:
+                    used_chunks = [c for c in relevant_chunks if c.id in used_ids]
+                    if not used_chunks:  # fallback si el LLM declaró IDs inexistentes
+                        used_chunks = relevant_chunks
+                        clean_response = full_response
+                    print(f"🎯 Chunks declarados por LLM: {used_ids} → {len(used_chunks)} válidos")
+                else:
+                    used_chunks = relevant_chunks
+                    clean_response = full_response
+                    print("⚠️ LLM no declaró fuentes, usando todos los chunks")
+
+                filtered_cited_pages = sorted(list(set(c.page_number for c in used_chunks)))
+
+                # Guardar mensaje del asistente con texto limpio y solo chunks usados
                 assistant_msg = Message(
                     conversation_id=conv_id,
                     role="assistant",
-                    content=full_response,
+                    content=clean_response,
                     created_at=datetime.now(),
-                    cited_chunks=[chunk.id for chunk in relevant_chunks],
+                    cited_chunks=[c.id for c in used_chunks],
                 )
                 assistant_msg = await self.conversation_repository.save_message(assistant_msg)
                 print("✅ Chat streaming completado y guardado")
@@ -152,11 +183,12 @@ class ChatWithDocumentUseCase:
                     "done": True,
                     "conversation_id": conv_id,
                     "message_id": assistant_msg.id,
-                    "cited_pages": cited_pages,
+                    "cited_pages": filtered_cited_pages,
                     "cited_snippets": [
                         {"page": c.page_number, "text": c.content[:250].strip()}
-                        for c in sorted(relevant_chunks, key=lambda x: (x.page_number, x.chunk_index))
+                        for c in sorted(used_chunks, key=lambda x: (x.page_number, x.chunk_index))
                     ],
+                    "clean_response": clean_response,
                 }
             except Exception as e:
                 print(f"❌ Error en streaming: {str(e)}")

@@ -1,6 +1,7 @@
+import re
 import ollama
 from typing import AsyncGenerator
-from typing import List
+from typing import List, Tuple
 from src.config.settings import get_settings
 
 settings = get_settings()
@@ -17,35 +18,71 @@ class OllamaClient:
         self.model = settings.ollama_model
         self.embedding_model = settings.ollama_embedding_model
     
+    @staticmethod
+    def parse_citations(response: str) -> Tuple[str, List[int]]:
+        """
+        Extrae los IDs de chunks declarados por el LLM y devuelve el texto limpio.
+        Busca el marcador @@FUENTES:[id1,id2,...]@@ en la respuesta.
+        También limpia patrones residuales de páginas que el LLM pueda haber añadido
+        (como '[Página 5, Página 12]' al final del texto).
+
+        Returns:
+            Tuple[str, List[int]]: (texto_limpio, lista_de_ids_usados)
+            Si no hay marcador, devuelve el texto sin patrones residuales y lista vacía.
+        """
+        pattern = r'@@FUENTES:\[([^\]]*)\]@@'
+        match = re.search(pattern, response)
+        if match:
+            ids_str = match.group(1)
+            try:
+                used_ids = [int(x.strip()) for x in ids_str.split(',') if x.strip()]
+            except ValueError:
+                used_ids = []
+            clean = re.sub(pattern, '', response).strip()
+        else:
+            used_ids = []
+            clean = response
+
+        # Red de seguridad: eliminar patrones de resumen de páginas al final del texto
+        # Ejemplos: '[Página 5]', '[Página 5, Página 12]', '[Páginas 5 y 12]'
+        clean = re.sub(r'\[\s*[Pp][áa]gina[s]?[\s\d,yaAY-]+\]', '', clean)
+        clean = clean.strip()
+
+        return clean, used_ids
+
     async def generate_response(
         self, 
         prompt: str, 
-        context_chunks: List[tuple[str, int]] = None
+        context_chunks: List[tuple[str, int, int]] = None
     ) -> str:
         """
         Genera una respuesta usando el modelo de Ollama
         
         Args:
             prompt: Pregunta del usuario
-            context_chunks: Lista de tuplas (contenido, página) con contexto relevante
+            context_chunks: Lista de tuplas (contenido, página, chunk_id) con contexto relevante
             
         Returns:
-            str: Respuesta generada por el modelo
+            str: Respuesta generada por el modelo (incluye marcador @@FUENTES:[]@@ al final)
         """
         system_prompt = """Eres un asistente experto en análisis de documentos PDF.
 Tu trabajo es responder preguntas basándote ÚNICAMENTE en el contexto proporcionado del documento.
 
 REGLAS IMPORTANTES:
 1. Solo usa información del contexto proporcionado
-2. SIEMPRE cita la página de donde obtuviste la información usando el formato: [Página X]
-3. Si la información no está en el contexto, di claramente que no puedes responder
-4. Sé preciso y conciso en tus respuestas
-5. Si citas múltiples páginas, menciona todas"""
+2. Si la información no está en el contexto, di claramente que no puedes responder
+3. Sé preciso y conciso en tus respuestas
+4. NO agregues resúmenes de páginas al final de tu respuesta
+5. NO menciones los IDs de los chunks en el texto de la respuesta. Escribe SOLO el texto de la respuesta.
+6. Al TERMINAR tu respuesta, en la ÚLTIMA línea escribe EXACTAMENTE el marcador de fuentes con los IDs de los fragmentos que realmente usaste:
+   @@FUENTES:[id1,id2,...]@@
+   Ejemplo: @@FUENTES:[3,7]@@
+   IMPORTANTE: escribe SOLO los IDs que realmente contienen información útil para tu respuesta. Nada más después de ese marcador."""
         
         if context_chunks and len(context_chunks) > 0:
             context_str = "\n\n".join([
-                f"[Página {page}]\n{content}" 
-                for content, page in context_chunks
+                f"[ID:{chunk_id} | Página:{page}]\n{content}" 
+                for content, page, chunk_id in context_chunks
             ])
             full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {prompt}"
         else:
@@ -67,32 +104,36 @@ REGLAS IMPORTANTES:
     async def generate_response_stream(
         self, 
         prompt: str, 
-        context_chunks: List[tuple[str, int]] = None
+        context_chunks: List[tuple[str, int, int]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Genera una respuesta en streaming usando Ollama (token por token)
         
         Args:
             prompt: Pregunta del usuario
-            context_chunks: Lista de tuplas (contenido, página) con contexto relevante
+            context_chunks: Lista de tuplas (contenido, página, chunk_id) con contexto relevante
             
         Yields:
-            str: Fragmentos de texto conforme se generan
+            str: Fragmentos de texto conforme se generan (incluye marcador @@FUENTES:[]@@ al final)
         """
         system_prompt = """Eres un asistente experto en análisis de documentos PDF.
 Tu trabajo es responder preguntas basándote ÚNICAMENTE en el contexto proporcionado del documento.
 
 REGLAS IMPORTANTES:
 1. Solo usa información del contexto proporcionado
-2. SIEMPRE cita la página de donde obtuviste la información usando el formato: [Página X]
-3. Si la información no está en el contexto, di claramente que no puedes responder
-4. Sé preciso y conciso en tus respuestas
-5. Si citas múltiples páginas, menciona todas"""
+2. Si la información no está en el contexto, di claramente que no puedes responder
+3. Sé preciso y conciso en tus respuestas
+4. NO agregues resúmenes de páginas al final de tu respuesta
+5. NO menciones los IDs de los chunks en el texto de la respuesta. Escribe SOLO el texto de la respuesta.
+6. Al TERMINAR tu respuesta, en la ÚLTIMA línea escribe EXACTAMENTE el marcador de fuentes con los IDs de los fragmentos que realmente usaste:
+   @@FUENTES:[id1,id2,...]@@
+   Ejemplo: @@FUENTES:[3,7]@@
+   IMPORTANTE: escribe SOLO los IDs que realmente contienen información útil para tu respuesta. Nada más después de ese marcador."""
         
         if context_chunks and len(context_chunks) > 0:
             context_str = "\n\n".join([
-                f"[Página {page}]\n{content}" 
-                for content, page in context_chunks
+                f"[ID:{chunk_id} | Página:{page}]\n{content}" 
+                for content, page, chunk_id in context_chunks
             ])
             full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {prompt}"
         else:

@@ -22,6 +22,8 @@ export function useChat(documentId: number) {
     // Temporarily hold citation data between SSE completion and message finalization
     const pendingCitedPages = useRef<number[]>([]);
     const pendingCitedSnippets = useRef<{ page: number; text: string }[]>([]);
+    // Respuesta limpia sin el marcador @@FUENTES:[]@@ que envió el backend
+    const pendingCleanResponse = useRef<string | null>(null);
 
     /**
      * On mount: fetch the single existing conversation for this document (if any)
@@ -81,6 +83,8 @@ export function useChat(documentId: number) {
                     // Capture citations from SSE done event
                     pendingCitedPages.current = completionData.cited_pages ?? [];
                     pendingCitedSnippets.current = completionData.cited_snippets ?? [];
+                    // Capturar respuesta limpia (sin marcador @@FUENTES:[]@@)
+                    pendingCleanResponse.current = completionData.clean_response ?? null;
                     if (completionData.conversation_id) {
                         setCurrentConversationId(completionData.conversation_id);
                     }
@@ -97,16 +101,22 @@ export function useChat(documentId: number) {
      */
     const finalizeStreamingMessage = useCallback(() => {
         if (streaming.streamingText) {
+            // Usar clean_response del backend si está disponible (sin marcador @@FUENTES:[]@@)
+            // Si no, hacer fallback al texto acumulado durante el stream
+            const rawText = pendingCleanResponse.current ?? streaming.streamingText;
+            // Limpiar localmente el marcador por si el backend no envió clean_response
+            const content = rawText.replace(/@@FUENTES:\[[^\]]*\]@@/g, '').trim();
             const assistantMessage: Message = {
                 id: Date.now(),
                 role: 'assistant',
-                content: streaming.streamingText,
+                content,
                 created_at: new Date().toISOString(),
                 cited_pages: pendingCitedPages.current.length > 0 ? [...pendingCitedPages.current] : undefined,
                 cited_snippets: pendingCitedSnippets.current.length > 0 ? [...pendingCitedSnippets.current] : undefined,
             };
             pendingCitedPages.current = [];
             pendingCitedSnippets.current = [];
+            pendingCleanResponse.current = null;
             setMessages((prev) => [...prev, assistantMessage]);
             streaming.resetStreaming();
         }
