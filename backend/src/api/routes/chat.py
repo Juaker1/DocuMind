@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from typing import List
 import json
@@ -20,6 +20,7 @@ from src.api.dependencies import (
     get_document_repository,
     get_document_for_current_user,
 )
+from src.api.limiter import limiter
 from src.domain.repositories.conversation_repository import ConversationRepository
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
 from src.domain.repositories.user_repository import UserRepository
@@ -30,7 +31,9 @@ from src.domain.entities.document import Document
 router = APIRouter()
 
 @router.get("/stream")
+@limiter.limit("10/minute")
 async def stream_chat(
+    request: Request,
     document_id: int,
     message: str,
     # SSE via EventSource no puede enviar headers — tokens van por query param
@@ -94,8 +97,10 @@ async def stream_chat(
 
 
 @router.post("/", response_model=ChatResponse)
+@limiter.limit("20/minute")
 async def chat_with_document(
-    request: ChatRequest,
+    request: Request,
+    body: ChatRequest,
     document: Document = Depends(get_document_for_current_user),
     chat_use_case: ChatWithDocumentUseCase = Depends(get_chat_use_case)
 ):
@@ -106,8 +111,8 @@ async def chat_with_document(
     try:
         response, conversation_id, message_id, cited_pages = await chat_use_case.execute(
             document_id=document.id,
-            user_message=request.message,
-            conversation_id=request.conversation_id
+            user_message=body.message,
+            conversation_id=body.conversation_id
         )
 
         return ChatResponse(

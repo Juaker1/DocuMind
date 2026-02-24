@@ -2,10 +2,17 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
+MAX_MESSAGE_LENGTH = 4000  # Exportado para que el frontend pueda leerlo si se expone
+
 class ChatRequest(BaseModel):
     """Request para chatear con un documento"""
-    document_id: int = Field(..., description="ID del documento")
-    message: str = Field(..., min_length=1, max_length=5000, description="Mensaje del usuario")
+    document_id: int = Field(..., gt=0, description="ID del documento")
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_MESSAGE_LENGTH,
+        description="Mensaje del usuario",
+    )
     conversation_id: Optional[int] = Field(default=None, description="ID de conversación existente (None para nueva)")
 
 class ChatResponse(BaseModel):

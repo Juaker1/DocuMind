@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Request
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.application.use_cases.upload_document import UploadDocumentUseCase
@@ -11,6 +11,7 @@ from src.api.dependencies import (
     get_current_user,
     get_document_for_current_user,
 )
+from src.api.limiter import limiter
 from src.domain.repositories.document_repository import DocumentRepository
 from src.domain.entities.user import User
 from src.domain.entities.document import Document
@@ -18,11 +19,16 @@ from src.infrastructure.database.connection import AsyncSessionLocal, get_db
 from src.infrastructure.database.repositories.document_repository_impl import DocumentRepositoryImpl
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
 
+# Magic number de los PDFs: los primeros 4 bytes siempre son "%PDF"
+_PDF_MAGIC = b"%PDF"
+
 
 router = APIRouter()
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=201)
+@limiter.limit("5/minute")
 async def upload_document(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -33,15 +39,33 @@ async def upload_document(
     Sube un documento PDF para ser procesado.
     El documento queda ligado al usuario actual (anónimo o registrado).
     """
-    if not file.filename.endswith('.pdf'):
+    # 1. Validar extensión del nombre
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF")
 
+    # 2. Validar Content-Type
     if not file.content_type or 'pdf' not in file.content_type.lower():
         raise HTTPException(status_code=400, detail="El archivo debe ser un PDF válido")
 
+    # 3. Validar tamaño antes de leer el archivo completo
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
+
+    from src.config.settings import get_settings
+    settings = get_settings()
+    if file_size > settings.max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El archivo supera el tamaño máximo permitido ({settings.max_file_size // 1024 // 1024}MB)"
+        )
+
+    # 4. Validar magic number: los primeros 4 bytes de un PDF real son "%PDF"
+    #    Esto impide subir ejecutables o cualquier otro archivo renombrado como .pdf
+    header = await file.read(4)
+    if header[:4] != _PDF_MAGIC:
+        raise HTTPException(status_code=400, detail="El archivo no es un PDF válido")
+    file.file.seek(0)  # Rebobinar para que el use case pueda leer el archivo completo
 
     try:
         document = await upload_use_case.execute(

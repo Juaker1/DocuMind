@@ -1,16 +1,16 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
-    uuid: str  # Current anonymous UUID (from X-User-UUID header)
+    password: str = Field(min_length=8, max_length=128)
+    uuid: str = Field(min_length=1, max_length=64)  # Current anonymous UUID (from X-User-UUID header)
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class AuthUserInfo(BaseModel):

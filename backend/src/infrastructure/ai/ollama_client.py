@@ -1,4 +1,5 @@
 import re
+import logging
 import ollama
 from typing import AsyncGenerator
 from typing import List, Tuple
@@ -6,6 +7,42 @@ from src.config.settings import get_settings
 from src.application.ports import LLMClientPort
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Prompt Injection — patrones que indican intento de manipular al LLM
+# ---------------------------------------------------------------------------
+_INJECTION_PATTERNS = [
+    r"ignora\s+(todas?\s+)?(las?\s+)?instrucciones",
+    r"olvida\s+(todo\s+)?lo\s+anterior",
+    r"nuevo\s+(rol|sistema|comportamiento)",
+    r"act[uú]a\s+como\s+(si\s+)?(fueras?|eres)",
+    r"\[\s*SYSTEM\s*\]",
+    r"<\s*system\s*>",
+    r"jailbreak",
+    r"ignore\s+(all\s+)?previous\s+instructions",
+    r"disregard\s+(all\s+)?instructions",
+    r"you\s+are\s+now\s+(a\s+)?(different|new|another)",
+]
+_INJECTION_RE = re.compile(
+    "|".join(_INJECTION_PATTERNS), re.IGNORECASE | re.UNICODE
+)
+
+
+def _sanitize_user_message(message: str) -> str:
+    """
+    Detecta patrones típicos de prompt injection.
+    - Loguea el intento para auditoría.
+    - NO bloquea: la separación de roles es la defensa principal.
+      Si se quiere bloquear, lanzar ValueError aquí.
+    Returns el mensaje original sin modificar.
+    """
+    if _INJECTION_RE.search(message):
+        logger.warning(
+            "Posible prompt injection detectado. Fragmento: %.120s",
+            message,
+        )
+    return message
 
 class OllamaClient(LLMClientPort):
     """
@@ -56,16 +93,9 @@ class OllamaClient(LLMClientPort):
         prompt: str, 
         context_chunks: List[tuple[str, int, int]] = None
     ) -> str:
-        """
-        Genera una respuesta usando el modelo de Ollama
-        
-        Args:
-            prompt: Pregunta del usuario
-            context_chunks: Lista de tuplas (contenido, página, chunk_id) con contexto relevante
-            
-        Returns:
-            str: Respuesta generada por el modelo (incluye marcador @@FUENTES:[]@@ al final)
-        """
+        # Sanitizar antes de construir el prompt — el mensaje del usuario
+        # NUNCA se interpola en el system_prompt, solo en el bloque 'user'.
+        safe_prompt = _sanitize_user_message(prompt)
         system_prompt = """Eres un asistente experto en análisis de documentos PDF.
 Tu trabajo es responder preguntas basándote ÚNICAMENTE en el contexto proporcionado del documento.
 
@@ -85,9 +115,9 @@ REGLAS IMPORTANTES:
                 f"[ID:{chunk_id} | Página:{page}]\n{content}" 
                 for content, page, chunk_id in context_chunks
             ])
-            full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {prompt}"
+            full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {safe_prompt}"
         else:
-            full_prompt = f"No hay contexto disponible.\n\nPregunta: {prompt}"
+            full_prompt = f"No hay contexto disponible.\n\nPregunta: {safe_prompt}"
         
         try:
             response = self.client.chat(
@@ -107,16 +137,8 @@ REGLAS IMPORTANTES:
         prompt: str, 
         context_chunks: List[tuple[str, int, int]] = None
     ) -> AsyncGenerator[str, None]:
-        """
-        Genera una respuesta en streaming usando Ollama (token por token)
-        
-        Args:
-            prompt: Pregunta del usuario
-            context_chunks: Lista de tuplas (contenido, página, chunk_id) con contexto relevante
-            
-        Yields:
-            str: Fragmentos de texto conforme se generan (incluye marcador @@FUENTES:[]@@ al final)
-        """
+        # Mismo sanitizador que en generate_response
+        safe_prompt = _sanitize_user_message(prompt)
         system_prompt = """Eres un asistente experto en análisis de documentos PDF.
 Tu trabajo es responder preguntas basándote ÚNICAMENTE en el contexto proporcionado del documento.
 
@@ -136,9 +158,9 @@ REGLAS IMPORTANTES:
                 f"[ID:{chunk_id} | Página:{page}]\n{content}" 
                 for content, page, chunk_id in context_chunks
             ])
-            full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {prompt}"
+            full_prompt = f"Contexto del documento:\n\n{context_str}\n\n---\n\nPregunta del usuario: {safe_prompt}"
         else:
-            full_prompt = f"No hay contexto disponible.\n\nPregunta: {prompt}"
+            full_prompt = f"No hay contexto disponible.\n\nPregunta: {safe_prompt}"
         
         try:
             import asyncio

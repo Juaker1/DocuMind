@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from src.application.dtos.user_dto import RegisterRequest, LoginRequest, AuthResponse, AuthUserInfo
 from src.application.use_cases.register_user import RegisterUserUseCase
@@ -6,13 +6,16 @@ from src.application.use_cases.login_user import LoginUserUseCase
 from src.domain.repositories.user_repository import UserRepository
 from src.domain.exceptions import InvalidCredentialsError, EmailAlreadyRegisteredError
 from src.api.dependencies import get_user_repository, get_current_user
+from src.api.limiter import limiter
 from src.domain.entities.user import User
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=AuthResponse, status_code=201)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     body: RegisterRequest,
     user_repo: UserRepository = Depends(get_user_repository),
 ):
@@ -38,7 +41,9 @@ async def register(
 
 
 @router.post("/login", response_model=AuthResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     body: LoginRequest,
     user_repo: UserRepository = Depends(get_user_repository),
 ):
