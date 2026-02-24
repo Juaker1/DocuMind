@@ -6,6 +6,7 @@ from src.infrastructure.database.repositories.document_repository_impl import Do
 from src.infrastructure.database.repositories.document_chunk_repository_impl import DocumentChunkRepositoryImpl
 from src.infrastructure.database.repositories.conversation_repository_impl import ConversationRepositoryImpl
 from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
+from src.infrastructure.database.repositories.refresh_token_repository_impl import RefreshTokenRepositoryImpl
 from src.infrastructure.document_processing.pdf_processor import PDFProcessor
 from src.infrastructure.document_processing.chunker import TextChunker
 from src.infrastructure.ai.embeddings import EmbeddingService
@@ -14,6 +15,7 @@ from src.domain.repositories.document_repository import DocumentRepository
 from src.domain.repositories.document_chunk_repository import DocumentChunkRepository
 from src.domain.repositories.conversation_repository import ConversationRepository
 from src.domain.repositories.user_repository import UserRepository
+from src.domain.repositories.refresh_token_repository import RefreshTokenRepository
 from src.application.use_cases.upload_document import UploadDocumentUseCase
 from src.application.use_cases.process_document import ProcessDocumentUseCase
 from src.application.use_cases.chat_with_document import ChatWithDocumentUseCase
@@ -45,6 +47,11 @@ async def get_user_repository(
     db: AsyncSession = Depends(get_db)
 ) -> UserRepository:
     return UserRepositoryImpl(db)
+
+async def get_refresh_token_repository(
+    db: AsyncSession = Depends(get_db)
+) -> RefreshTokenRepository:
+    return RefreshTokenRepositoryImpl(db)
 
 # ============================================================================
 # Auth Dependency — resolves current user from JWT or anonymous UUID

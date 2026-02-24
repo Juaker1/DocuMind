@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from src.api.limiter import limiter
 from src.config.settings import get_settings
 from src.api.routes import health, documents, chat, auth
+from src.api.middleware.security_headers import SecurityHeadersMiddleware
 from src.domain.exceptions import (
     DomainException,
     InvalidCredentialsError,
@@ -55,6 +56,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Security Headers — se agregan a todas las respuestas de la API
+# Registrar DESPUÉS de CORS para ejecutarse como capa más externa
+# ---------------------------------------------------------------------------
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ---------------------------------------------------------------------------
 # Exception handlers globales

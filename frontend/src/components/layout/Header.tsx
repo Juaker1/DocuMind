@@ -113,7 +113,7 @@ export function Header() {
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
                                             </div>
                                             <button
-                                                onClick={() => { logout(); setUserMenuOpen(false); }}
+                                                onClick={() => { setUserMenuOpen(false); logout(); }}
                                                 className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                                             >
                                                 Cerrar sesión

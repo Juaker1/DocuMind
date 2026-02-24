@@ -7,6 +7,9 @@ import {
     getAuthToken,
     setAuthToken,
     clearAuthToken,
+    getRefreshToken,
+    setRefreshToken,
+    clearAllTokens,
 } from '@/lib/identity';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,7 +27,7 @@ interface AuthContextValue {
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (email: string, password: string) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
     deleteAccount: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -69,29 +72,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // ── Login ────────────────────────────────────────────────────────────────
     const login = useCallback(async (email: string, password: string) => {
-        const res = await apiClient.post<{ token: string; user: AuthUser }>('/api/auth/login', {
+        const res = await apiClient.post<{ access_token: string; refresh_token: string; user: AuthUser }>('/api/auth/login', {
             email,
             password,
         });
-        setAuthToken(res.data.token);
+        setAuthToken(res.data.access_token);
+        setRefreshToken(res.data.refresh_token);
         setUser(res.data.user);
     }, []);
 
     // ── Register (anonymous → registered, docs preserved) ────────────────────
     const register = useCallback(async (email: string, password: string) => {
         const uuid = getOrCreateUUID();
-        const res = await apiClient.post<{ token: string; user: AuthUser }>('/api/auth/register', {
+        const res = await apiClient.post<{ access_token: string; refresh_token: string; user: AuthUser }>('/api/auth/register', {
             email,
             password,
             uuid,
         });
-        setAuthToken(res.data.token);
+        setAuthToken(res.data.access_token);
+        setRefreshToken(res.data.refresh_token);
         setUser(res.data.user);
     }, []);
 
     // ── Logout ───────────────────────────────────────────────────────────────
-    const logout = useCallback(() => {
-        clearAuthToken();
+    const logout = useCallback(async () => {
+        // Revocar el refresh token en el servidor antes de limpiar localmente
+        const refreshToken = getRefreshToken();
+        if (refreshToken) {
+            try {
+                await apiClient.post('/api/auth/logout', { refresh_token: refreshToken });
+            } catch {
+                // Si falla (e.g. sin conexión), limpiamos localmente igual
+            }
+        }
+        clearAllTokens();
         setUser(null);
         // Keep UUID so the browser retains anonymous session state
     }, []);
@@ -99,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // ── Delete account ───────────────────────────────────────────────────────
     const deleteAccount = useCallback(async () => {
         await apiClient.delete('/api/auth/account');
-        clearAuthToken();
+        clearAllTokens();
         setUser(null);
     }, []);
 

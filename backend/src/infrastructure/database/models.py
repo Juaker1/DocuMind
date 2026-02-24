@@ -18,6 +18,11 @@ class UserModel(Base):
 
     # Relaciones
     documents = relationship("DocumentModel", back_populates="user")
+    refresh_tokens = relationship(
+        "RefreshTokenModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class DocumentModel(Base):
@@ -115,3 +120,28 @@ class MessageModel(Base):
 
     # Relaciones
     conversation = relationship("ConversationModel", back_populates="messages")
+
+
+class RefreshTokenModel(Base):
+    """
+    Almacena el hash SHA-256 de los refresh tokens activos.
+    Guardar el hash (no el token en claro) permite:
+      - Invalidar un token robado sin exponer el valor original.
+      - Implementar refresh token rotation: cada uso genera un nuevo par.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    user_id    = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)  # SHA-256 hex
+    expires_at = Column(DateTime, nullable=False)
+    revoked    = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    # Relaciones
+    user = relationship("UserModel", back_populates="refresh_tokens")

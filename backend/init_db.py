@@ -10,10 +10,12 @@ async def main():
     
     # Importar todos los modelos para que SQLAlchemy los registre
     from src.infrastructure.database.models import (
+        UserModel,
         DocumentModel,
         DocumentChunkModel,
         ConversationModel,
-        MessageModel
+        MessageModel,
+        RefreshTokenModel,
     )
     
     # Crear todas las tablas
@@ -21,10 +23,12 @@ async def main():
     
     print("✅ Tablas creadas exitosamente!")
     print("\nTablas creadas:")
+    print("  - users")
     print("  - documents")
     print("  - document_chunks (con soporte de vector)")
     print("  - conversations")
     print("  - messages")
+    print("  - refresh_tokens")
 
 if __name__ == "__main__":
     asyncio.run(main())

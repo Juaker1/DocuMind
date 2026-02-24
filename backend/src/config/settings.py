@@ -23,6 +23,10 @@ class Settings(BaseSettings):
 
     # Auth
     secret_key: str = "change-me-in-production-use-a-long-random-string"
+    # access_token: corto plazo (comprometido = poco tiempo de exposición)
+    # refresh_token: largo plazo, almacenado en DB para poder revocar
+    access_token_expire_minutes: int = 60   # 1 hora por defecto
+    refresh_token_expire_days: int = 7      # 7 días por defecto
     
     # Upload Configuration
     max_file_size: int = 10 * 1024 * 1024  # 10MB
