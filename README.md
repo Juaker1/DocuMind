@@ -1,8 +1,26 @@
 # DocuMind
 
+<div align="center">
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.128-009688?style=flat&logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-Local_AI-000000?style=flat)
+![License](https://img.shields.io/badge/Licencia-MIT-yellow?style=flat)
+
+</div>
+
 Sistema de chat con documentos PDF impulsado por IA local. Sube un PDF, hazle preguntas y obtén respuestas en tiempo real con citas de las páginas exactas del documento — sin enviar tus datos a ningún servicio externo.
 
 > Stack: **FastAPI** · **Next.js 16** · **PostgreSQL + pgvector** · **Ollama**
+
+<div align="center">
+  <img src="docs/images/home.png" alt="DocuMind — Página principal" width="800"/>
+  <br/><br/>
+  <img src="docs/images/chat.png" alt="DocuMind — Chat con documento" width="800"/>
+</div>
 
 ---
 
