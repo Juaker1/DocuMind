@@ -1,8 +1,444 @@
-# DocuMind Backend - API Completa ✅
+# DocuMind — Backend API
 
-Backend del proyecto DocuMind implementado con FastAPI, Python 3.12, Clean Architecture y RAG.
+API REST para el sistema de chat con documentos PDF usando RAG (Retrieval-Augmented Generation) con modelos de lenguaje locales a través de Ollama.
 
-## 🚀 Quick Start
+---
+
+## Tecnologías
+
+| Capa | Tecnología |
+|------|-----------|
+| Framework | FastAPI 0.128.0 |
+| Base de datos | PostgreSQL + pgvector |
+| ORM | SQLAlchemy 2.0.46 (async) |
+| LLM | Ollama (configurable, default: qwen2.5:14b) |
+| Embeddings | nomic-embed-text — 768 dimensiones |
+| PDF Processing | Docling 2.72.0 + PyPDF (fallback) |
+| Validación | Pydantic 2.12.5 |
+| Autenticación | JWT (access + refresh tokens) via python-jose |
+| Rate Limiting | slowapi 0.1.9 |
+| Python | 3.12 (conda env `documind`) |
+
+---
+
+## Arquitectura
+
+El backend sigue **Clean Architecture** en cuatro capas con dependencias que apuntan siempre hacia adentro:
+
+```
+api/ → application/ → domain/ ← infrastructure/
+```
+
+| Capa | Responsabilidad |
+|------|----------------|
+| `domain/` | Entidades, Value Objects, interfaces de repositorios, excepciones de dominio |
+| `application/` | Use Cases, DTOs, interfaces de servicios externos (Ports) |
+| `infrastructure/` | Implementaciones: PostgreSQL, Ollama, Docling |
+| `api/` | Rutas FastAPI, middleware, dependency injection |
+
+### Estructura de carpetas
+
+```
+backend/
+├── src/
+│   ├── domain/
+│   │   ├── entities/           # User, Document, DocumentChunk, Conversation, Message
+│   │   ├── repositories/       # Interfaces abstractas (Ports)
+│   │   ├── value_objects/      # Email, EmbeddingVector, UserId, DocumentId, ConversationId
+│   │   └── exceptions.py       # Excepciones de dominio
+│   ├── application/
+│   │   ├── dtos/               # Request/Response schemas (Pydantic)
+│   │   ├── ports.py            # Interfaces de servicios externos
+│   │   └── use_cases/          # Lógica de negocio
+│   ├── infrastructure/
+│   │   ├── ai/                 # OllamaClient, EmbeddingService
+│   │   ├── database/
+│   │   │   ├── models.py       # Modelos SQLAlchemy
+│   │   │   ├── connection.py   # Engine + session factory
+│   │   │   └── repositories/   # Implementaciones concretas
+│   │   └── document_processing/ # PDFProcessor, TextChunker
+│   ├── api/
+│   │   ├── middleware/
+│   │   │   └── security_headers.py
+│   │   ├── routes/             # auth, documents, chat, health
+│   │   ├── dependencies.py     # Composition Root (DI)
+│   │   ├── limiter.py          # Instancia compartida slowapi
+│   │   └── main.py
+│   └── config/
+│       └── settings.py         # Configuración centralizada (pydantic-settings)
+├── uploads/                    # PDFs subidos por los usuarios
+├── init_db.py                  # Crea todas las tablas desde cero
+├── migrate_refresh_tokens.py   # Migración para DBs existentes
+├── requirements.txt
+├── .env
+└── start_server.ps1
+```
+
+---
+
+## Requisitos previos
+
+- **conda** con el environment `documind` creado
+- **PostgreSQL** corriendo con la extensión `pgvector` instalada
+- **Ollama** corriendo localmente con los modelos descargados
+
+### Modelos Ollama necesarios
+
+```powershell
+ollama pull qwen2.5:14b          # LLM para respuestas
+ollama pull nomic-embed-text     # Embeddings (768 dims)
+```
+
+> Si querés usar otro LLM, cambia `OLLAMA_MODEL` en `.env`.
+
+---
+
+## Instalación
+
+### 1. Crear el environment conda
+
+```powershell
+conda create -n documind python=3.12 -y
+conda activate documind
+```
+
+### 2. Instalar dependencias
+
+```powershell
+cd backend
+pip install -r requirements.txt
+```
+
+### 3. Configurar variables de entorno
+
+Copia o edita el archivo `.env` en `backend/`:
+
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/documind
+
+# Ollama
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:14b
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+
+# Application
+APP_NAME=DocuMind
+DEBUG=True
+
+# CORS — orígenes permitidos del frontend
+ALLOWED_ORIGINS=["http://localhost:3000"]
+
+# Auth
+SECRET_KEY=cambia-esto-en-produccion-cadena-larga-aleatoria
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Upload
+MAX_FILE_SIZE=10485760
+UPLOAD_DIR=uploads
+```
+
+> En producción: `DEBUG=False` oculta `/docs` y `/redoc`, activa HSTS y cambia el nivel de log a INFO.
+
+### 4. Inicializar la base de datos
+
+**Base de datos nueva:**
+
+```powershell
+$env:PYTHONPATH = "$PWD"
+python init_db.py
+```
+
+Esto crea las tablas: `users`, `documents`, `document_chunks`, `conversations`, `messages`, `refresh_tokens`.
+
+**Base de datos existente (migraciones):**
+
+```powershell
+# Agregar tabla refresh_tokens (JWT refresh)
+conda run -n documind python backend/migrate_refresh_tokens.py
+```
+
+---
+
+## Iniciar el servidor
+
+```powershell
+.\start_server.ps1
+```
+
+O manualmente:
+
+```powershell
+$env:PYTHONPATH = "c:\ruta\a\DocuMind\backend"
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+El servidor queda disponible en `http://localhost:8000`.
+
+Documentación interactiva (solo con `DEBUG=True`):
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+---
+
+## Endpoints
+
+### Auth — `/api/auth`
+
+| Método | Ruta | Descripción | Auth requerida |
+|--------|------|-------------|----------------|
+| `POST` | `/register` | Registra usuario (convierte anónimo → registrado) | No |
+| `POST` | `/login` | Login con email y contraseña | No |
+| `POST` | `/refresh` | Renueva access token usando refresh token | No |
+| `POST` | `/logout` | Revoca el refresh token del dispositivo | No |
+| `GET` | `/me` | Info del usuario actual | Sí |
+| `DELETE` | `/account` | Elimina cuenta y todos sus datos | Sí |
+
+#### Autenticación de requests
+
+Cada request debe incluir **uno** de los siguientes headers:
+
+```
+Authorization: Bearer <access_token>    # Usuario registrado
+X-User-UUID: <uuid>                     # Usuario anónimo
+```
+
+#### Flujo de tokens
+
+```
+POST /login  →  { access_token, refresh_token, user }
+                       │               │
+                  expira en        expira en
+                  60 minutos        7 días
+                       │
+            Cuando expira → POST /refresh con refresh_token
+                         →  { access_token, refresh_token }  (rotation)
+```
+
+El frontend renueva el `access_token` automáticamente (interceptor en `api.ts`).
+
+### Documentos — `/api/documents`
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/upload` | Sube un PDF (procesamiento en background) |
+| `GET` | `/` | Lista documentos del usuario |
+| `GET` | `/{id}` | Detalle de un documento |
+| `POST` | `/{id}/process` | Reprocesa un documento manualmente |
+| `DELETE` | `/{id}` | Elimina documento y sus datos asociados |
+
+Todos los endpoints verifican que el documento pertenezca al usuario autenticado.
+
+### Chat — `/api/chat`
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/` | Envía mensaje (respuesta completa) |
+| `GET` | `/stream` | Envía mensaje con respuesta en streaming (SSE) |
+| `GET` | `/documents/{id}/conversations` | Conversaciones de un documento |
+| `DELETE` | `/conversations/{id}` | Reinicia conversación |
+
+### Health
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Estado del servidor |
+
+---
+
+## Flujo RAG
+
+```
+1. Usuario sube PDF
+        ↓
+2. Docling extrae texto y estructura (con PyPDF como fallback)
+        ↓
+3. TextChunker divide en fragmentos (chunk_size=1500, overlap=300)
+        ↓
+4. OllamaClient genera embeddings con nomic-embed-text (768 dims)
+        ↓
+5. Chunks + embeddings guardados en PostgreSQL (columna vector pgvector)
+        ↓
+6. Usuario envía pregunta
+        ↓
+7. Pregunta convertida a embedding
+        ↓
+8. pgvector busca los N chunks más similares (cosine distance)
+        ↓
+9. Contexto + pregunta enviados a Ollama (qwen2.5:14b)
+        ↓
+10. LLM genera respuesta incluyendo @@FUENTES:[id1,id2]@@ al final
+        ↓
+11. Backend parsea fuentes, deduplica, devuelve respuesta limpia + cited_chunks
+```
+
+---
+
+## Seguridad implementada
+
+### Rate Limiting (slowapi)
+
+| Endpoint | Límite |
+|----------|--------|
+| `POST /register` | 5 req/min por IP |
+| `POST /login` | 10 req/min por IP |
+| `POST /refresh` | 20 req/min por IP |
+| `POST /documents/upload` | 5 req/min por IP |
+| `GET /chat/stream` | 10 req/min por IP |
+| `POST /chat/` | 20 req/min por IP |
+
+### Validación de uploads
+
+- Extensión: solo `.pdf`
+- Content-Type: solo `application/pdf`
+- Tamaño máximo: configurable via `MAX_FILE_SIZE` (default 10 MB)
+- Magic number: verifica que los primeros 4 bytes sean `%PDF`
+
+### Validación de mensajes
+
+- Longitud máxima: 4000 caracteres
+- Detección de patrones de prompt injection (logging de intentos)
+- Mensaje del usuario enviado únicamente en `role: user`, nunca en el system prompt
+
+### JWT
+
+- Access tokens con claim `type: access` — no se pueden usar como refresh
+- Refresh tokens almacenados como hash SHA-256 en BD — nunca el valor original
+- Refresh token rotation: cada uso genera un nuevo par y revoca el anterior
+- `POST /logout` revoca el token del dispositivo actual
+
+### Security Headers
+
+Todas las respuestas incluyen:
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), ...
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+Strict-Transport-Security: max-age=31536000 (solo en producción)
+```
+
+### Ownership
+
+Todos los endpoints de documentos y chat verifican que el recurso pertenezca al usuario autenticado. Un recurso ajeno devuelve `404` (no `403`) para no revelar su existencia.
+
+### CORS
+
+Orígenes permitidos configurados en `.env` via `ALLOWED_ORIGINS`. En producción, reemplazar con el dominio real del frontend.
+
+---
+
+## Base de datos
+
+### Tablas
+
+| Tabla | Descripción |
+|-------|-------------|
+| `users` | Usuarios anónimos y registrados |
+| `documents` | Metadatos de PDFs subidos |
+| `document_chunks` | Fragmentos de texto con embeddings vectoriales (768 dims) |
+| `conversations` | Una conversación por documento por usuario |
+| `messages` | Mensajes del chat con metadatos de citación |
+| `refresh_tokens` | Hashes SHA-256 de refresh tokens activos/revocados |
+
+### Relaciones
+
+```
+users ──< documents ──< document_chunks
+               └──< conversations ──< messages
+users ──< refresh_tokens
+```
+
+Todas las FK usan `ON DELETE CASCADE`.
+
+---
+
+## Ejemplos de uso (curl)
+
+### Registrar usuario
+
+```bash
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "mypassword", "uuid": "mi-uuid-anonimo"}'
+```
+
+### Login
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "mypassword"}'
+```
+
+Respuesta:
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "user": { "id": 1, "uuid": "...", "email": "user@example.com", "is_anonymous": false }
+}
+```
+
+### Subir un PDF
+
+```bash
+curl -X POST http://localhost:8000/api/documents/upload \
+  -H "Authorization: Bearer <access_token>" \
+  -F "file=@mi_documento.pdf"
+```
+
+### Chatear con streaming
+
+```bash
+curl "http://localhost:8000/api/chat/stream?document_id=1&message=De+que+trata+este+documento" \
+  -H "Authorization: Bearer <access_token>" \
+  --no-buffer
+```
+
+### Renovar access token
+
+```bash
+curl -X POST http://localhost:8000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "eyJ..."}'
+```
+
+---
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'src'`
+
+```powershell
+$env:PYTHONPATH = "c:\ruta\completa\a\DocuMind\backend"
+```
+
+### `Connection refused` a PostgreSQL
+
+- Verificar que PostgreSQL esté corriendo
+- Con Docker: `docker-compose up -d` desde la raíz del proyecto
+- Verificar `DATABASE_URL` en `.env`
+
+### `Ollama not available`
+
+```powershell
+ollama list        # Ver modelos instalados
+ollama serve       # Iniciar Ollama si no está corriendo
+```
+
+### `asyncpg.exceptions.PostgresSyntaxError: cannot insert multiple commands`
+
+`asyncpg` no admite múltiples sentencias SQL en un único `execute()`. Ejecutar las sentencias por separado.
+
+### Los documentos no terminan de procesarse
+
+Verificar que el `commit()` de la sesión se ejecute **antes** de agregar la tarea al `BackgroundTasks`. El procesamiento en background necesita que el documento ya esté en la BD al iniciarse.
+
 
 ### 1. Instalar dependencias faltantes
 
